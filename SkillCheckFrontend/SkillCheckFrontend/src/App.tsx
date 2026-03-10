@@ -2,6 +2,7 @@ import { useState } from "react";
 import Axios from "axios";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Home } from "./pages/Home";
+import Test from "./pages/Test";
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 function App() {
   const client = new QueryClient({
@@ -11,12 +12,12 @@ function App() {
       },
   }
   });
-
+  
   return (
   <QueryClientProvider client={client}>
     <Router>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Test />} />
       </Routes>
     </Router>
   </QueryClientProvider>
