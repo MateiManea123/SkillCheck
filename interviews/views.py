@@ -65,6 +65,14 @@ def current_question(request,session_id):
     
     current_index = my_session.current_index
 
+    previous_answer = None
+    previous_sq = my_session.session_questions.filter(order=my_session.current_index - 1).first()
+    print("------Previous session question:------", previous_sq.question.text)
+    if previous_sq and hasattr(previous_sq, "answer"):
+        previous_answer = previous_sq.answer.text
+
+    print("----Previous session question answer:----", previous_sq.answer.text)
+
     session_questions = my_session.session_questions.order_by("order")
     
     if current_index >= session_questions.count():
@@ -80,7 +88,7 @@ def current_question(request,session_id):
         ai=AIInterviewService()
         if session_question.question:
             original_text = session_question.question.text
-            rewritten = ai.rewrite_question(my_session.interview_type, original_text)
+            rewritten = ai.rewrite_question(my_session.interview_type, original_text,previous_answer)
             session_question.display_text = rewritten
             session_question.save(update_fields=["display_text"])
         else:
@@ -132,34 +140,40 @@ def submit_answer(request,session_id):
     
     with transaction.atomic():
         has_followup_already = current_question.followups.exists()
+        followup_text = ai_result.get("followup_question", "").strip()
 
-        if ai_result.get("needs_followup") and not has_followup_already:
-            SessionQuestion.objects.filter(
+        if (
+            current_question.question_kind == "BASE"
+            and ai_result.get("needs_followup")
+            and not has_followup_already
+            and followup_text
+        ):
+            later_questions = SessionQuestion.objects.filter(
                 session=my_session,
                 order__gt=current_question.order
-            ).update(order=F("order") + 1000)
+            )
 
-            SessionQuestion.objects.filter(
-                session=my_session,
-                order__gt=current_question.order + 1000 - 1
-            ).update(order=F("order") - 999)
+            later_questions.update(order=F("order") + 1000)
+            later_questions.update(order=F("order") - 999)
 
             SessionQuestion.objects.create(
                 session=my_session,
                 question=None,
                 order=current_question.order + 1,
                 question_kind="FOLLOW_UP",
-                display_text=ai_result.get("followup_question", ""),
+                display_text=followup_text,
                 parent_session_question=current_question,
             )
-
         my_session.current_index += 1
-
+        
         total_questions = my_session.session_questions.count()
+        
         if my_session.current_index >= total_questions:
             my_session.status = "FINISHED"
+            my_session.ended_at = timezone.now()
 
-        my_session.save(update_fields=["current_index", "status"])
+        my_session.save(update_fields=["current_index", "status", "ended_at"])
+
 
     
     return Response({
@@ -177,21 +191,25 @@ def session_details(request,session_id):
     my_session = Session.objects.get(id=session_id)
     if not my_session:
         return Response("Session not found",status=status.HTTP_404_NOT_FOUND)
-    session_questions = my_session.session_questions.order_by("order")
+    session_questions = SessionQuestion.objects.filter(session=my_session).order_by("order")
     questions_data = []
     for session_question in session_questions:
-        question = session_question.question
+
         answer = Answer.objects.filter(session_question=session_question).first()
         questions_data.append({
-            "question_id": question.id,
-            "question_text": question.text,
+            "question_text": session_question.display_text,
             "answer_text": answer.text if answer else None
         })
+        ai = AIInterviewService()
+        ai_feedback = ai.generate_final_session_feedback(
+            interview_type=my_session.interview_type,
+            qa_pairs=questions_data)
     session_data = {
-        "session_id": my_session.id,
+        "session_id": session_id,
         "status": my_session.status,
         "created_at": my_session.created_at,
         "ended_at": my_session.ended_at,
-        "questions": questions_data
+        "questions": questions_data,
+        "ai_feedback": ai_feedback
     }
     return Response(session_data,status=status.HTTP_200_OK)

@@ -88,10 +88,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'skillcheck_db',
-        'USER': 'postgres',
+        'USER': 'mateimanea',
         'PASSWORD': 'admin123',
         'HOST': 'localhost',
-        'PORT': '5433'
+        'PORT': '5432'
     }
 }
 
