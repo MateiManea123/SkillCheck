@@ -67,11 +67,9 @@ def current_question(request,session_id):
 
     previous_answer = None
     previous_sq = my_session.session_questions.filter(order=my_session.current_index - 1).first()
-    print("------Previous session question:------", previous_sq.question.text)
     if previous_sq and hasattr(previous_sq, "answer"):
         previous_answer = previous_sq.answer.text
 
-    print("----Previous session question answer:----", previous_sq.answer.text)
 
     session_questions = my_session.session_questions.order_by("order")
     

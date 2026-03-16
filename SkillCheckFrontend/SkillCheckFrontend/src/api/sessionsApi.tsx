@@ -1,26 +1,43 @@
 import axios from "axios";
+import type {
+  CurrentQuestionResponse,
+  SessionDetailsResponse,
+  StartSessionPayload,
+  StartSessionResponse,
+  SubmitAnswerPayload,
+  SubmitAnswerResponse,
+} from "../types/session";
 
-const API = "http://127.0.0.1:8000/api";
+const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-export async function startSession() {
-  const res = await axios.post(`${API}/sessions/`);
-  return res.data; // { session_id, total_questions }
+const apiClient = axios.create({
+  baseURL: API,
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+export async function startSession(payload: StartSessionPayload): Promise<StartSessionResponse> {
+  const res = await apiClient.post<StartSessionResponse>("/sessions/", payload);
+  return res.data;
 }
 
-export async function getCurrentQuestion(sessionId: any) {
-  const res = await axios.get(`${API}/sessions/${sessionId}/current-question/`);
-  return res.data; // { question_id, question_text }
+export async function getCurrentQuestion(sessionId: number): Promise<CurrentQuestionResponse> {
+  const res = await apiClient.get<CurrentQuestionResponse>(`/sessions/${sessionId}/current-question/`);
+  return res.data;
 }
 
-export async function submitAnswer({ sessionId, question_id, answer }: { sessionId: string; question_id: string; answer: string }) {
-  const res = await axios.post(`${API}/sessions/${sessionId}/answer/`, {
-    question_id,
+export async function submitAnswer({ sessionId, answer }: SubmitAnswerPayload): Promise<SubmitAnswerResponse> {
+  const res = await apiClient.post<SubmitAnswerResponse>(`/sessions/${sessionId}/answer/`, {
     answer,
   });
   return res.data;
 }
 
-export async function getSessionData(sessionId: string) {
-  const res = await axios.get(`${API}/sessions/${sessionId}/`);
+export async function getSessionData(sessionId: number): Promise<SessionDetailsResponse> {
+  const res = await apiClient.get<SessionDetailsResponse>(`/sessions/${sessionId}/`, {
+    timeout: 60000,
+  });
   return res.data;
 }

@@ -1,26 +1,35 @@
-import { useState } from "react";
-import Axios from "axios";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useState } from "react";
 import { Home } from "./pages/Home";
-import Test from "./pages/Test";
-import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
+import { About } from "./pages/About";
+import { Interview } from "./pages/Interview";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AppLayout } from "./components/AppLayout";
+
 function App() {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: {
-        refetchOnWindowFocus: false,
-      },
-  }
-  });
-  
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  );
+
   return (
-  <QueryClientProvider client={client}>
-    <Router>
-      <Routes>
-        <Route path="/" element={<Test />} />
-      </Routes>
-    </Router>
-  </QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <Router>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/interview" element={<Interview />} />
+            <Route path="/about" element={<About />} />
+          </Route>
+        </Routes>
+      </Router>
+    </QueryClientProvider>
   );
 }
 

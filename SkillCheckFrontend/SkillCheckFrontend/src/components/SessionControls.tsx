@@ -1,21 +1,139 @@
+import { useState } from "react";
+import type { InterviewType, LevelType, RoleType, StartSessionPayload } from "../types/session";
+
 interface SessionControlsProps {
   loading: boolean;
-  onStart: () => void;
-  sessionId: string | null;
+  onStart: (payload: StartSessionPayload) => void;
+  sessionId: number | null;
+  disabled?: boolean;
 }
 
-export function SessionControls({ loading, onStart, sessionId }: SessionControlsProps) {
+const INTERVIEW_TYPES: InterviewType[] = ["TECHNICAL", "HR"];
+const ROLES: RoleType[] = ["FRONTEND", "BACKEND"];
+const LEVELS: LevelType[] = ["JUNIOR", "MID", "SENIOR"];
+
+export function SessionControls({ loading, onStart, sessionId, disabled = false }: SessionControlsProps) {
+  const [interviewType, setInterviewType] = useState<InterviewType>("TECHNICAL");
+  const [role, setRole] = useState<RoleType>("FRONTEND");
+  const [level, setLevel] = useState<LevelType>("JUNIOR");
+
+  const handleStart = () => {
+    if (interviewType === "HR") {
+      onStart({ interview_type: interviewType });
+      return;
+    }
+
+    onStart({
+      interview_type: interviewType,
+      role,
+      level,
+    });
+  };
+
+  const isTechnical = interviewType === "TECHNICAL";
+
   return (
-    <div>
-      <button onClick={onStart} disabled={loading}>
-        {loading ? "Loading..." : "Start Session"}
+    <section className="rounded-3xl border border-white/80 bg-white/85 p-6 shadow-xl shadow-sky-100/60">
+      <h2 className="text-xl font-bold text-slate-900">Session Settings</h2>
+
+      <div className="mt-5 grid gap-5">
+        <div className="grid gap-2">
+          <label className="text-sm font-semibold tracking-wide text-slate-600" htmlFor="interviewType">
+            Interview type
+          </label>
+          <div
+            id="interviewType"
+            className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1"
+            aria-label="Interview type"
+          >
+            {INTERVIEW_TYPES.map((item) => {
+              const selected = interviewType === item;
+
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setInterviewType(item)}
+                  disabled={disabled || loading}
+                  className={`rounded-xl px-3 py-2 text-sm font-semibold tracking-wide transition ${
+                    selected
+                      ? "bg-white text-sky-700 shadow-sm ring-1 ring-sky-200"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {isTechnical && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold tracking-wide text-slate-600" htmlFor="role">
+                  Role
+                </label>
+                <select
+                  id="role"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none ring-sky-400/70 transition focus:ring-2"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as RoleType)}
+                  disabled={disabled || loading}
+                >
+                  {ROLES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold tracking-wide text-slate-600" htmlFor="level">
+                  Level
+                </label>
+                <select
+                  id="level"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none ring-sky-400/70 transition focus:ring-2"
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value as LevelType)}
+                  disabled={disabled || loading}
+                >
+                  {LEVELS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <button
+        className="mt-5 inline-flex items-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={handleStart}
+        disabled={loading || disabled}
+      >
+        {loading ? "Starting..." : "Start Session"}
       </button>
 
       {sessionId && (
-        <p style={{ marginTop: 12 }}>
-          <b>Session ID:</b> {sessionId}
+        <p className="mt-3 text-sm text-slate-600">
+          <b>Session ID:</b> #{sessionId}
         </p>
       )}
-    </div>
+
+      {!!sessionId && !disabled && (
+        <p className="mt-1 text-xs text-slate-500">Active session is ready.</p>
+      )}
+
+      {!!sessionId && disabled && (
+        <p className="mt-1 text-xs text-slate-500">An active session is in progress. Continue answering questions below.</p>
+      )}
+    </section>
   );
 }

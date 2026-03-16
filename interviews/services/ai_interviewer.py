@@ -9,33 +9,60 @@ load_dotenv()
 
 class AIInterviewService:
     def __init__(self):
+        provider = os.getenv("LLM_PROVIDER", "auto").lower()
+
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+        azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
-        if not endpoint:
-            raise ValueError("AZURE_OPENAI_ENDPOINT is missing")
-        if not api_key:
-            raise ValueError("AZURE_OPENAI_API_KEY is missing")
-        if not self.deployment:
-            raise ValueError("AZURE_OPENAI_DEPLOYMENT is missing")
+        if provider == "auto":
+            if endpoint and api_key and azure_deployment:
+                provider = "azure"
+            else:
+                provider = "ollama"
 
-        self.client = OpenAI(
-            api_key=api_key, base_url=f"{endpoint.rstrip('/')}/openai/v1/"
+        if provider == "azure":
+            if not endpoint:
+                raise ValueError("AZURE_OPENAI_ENDPOINT is missing")
+            if not api_key:
+                raise ValueError("AZURE_OPENAI_API_KEY is missing")
+            if not azure_deployment:
+                raise ValueError("AZURE_OPENAI_DEPLOYMENT is missing")
+
+            self.model = azure_deployment
+            self.client = OpenAI(
+                api_key=api_key, base_url=f"{endpoint.rstrip('/')}/openai/v1/"
+            )
+            return
+
+        if provider == "ollama":
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            ollama_api_key = os.getenv("OLLAMA_API_KEY", "ollama")
+
+            self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+            self.client = OpenAI(
+                api_key=ollama_api_key,
+                base_url=ollama_base_url.rstrip("/"),
+            )
+            return
+
+        raise ValueError(
+            "Invalid LLM_PROVIDER. Use one of: auto, azure, ollama"
         )
 
     def _chat(
         self, system_prompt: str, user_prompt: str, temperature: float = 0.4
     ) -> str:
         response = self.client.chat.completions.create(
-            model=self.deployment,  # deployment name in Azure
+            model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=temperature,
         )
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content or ""
+        return content.strip()
 
     def rewrite_question(
         self,
