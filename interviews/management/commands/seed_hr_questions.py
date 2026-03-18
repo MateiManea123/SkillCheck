@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
 from interviews.models import Question
 
-
 HR_QUESTIONS = [
     "Tell me about yourself.",
     "Why do you want to work for this company?",
@@ -53,14 +52,135 @@ HR_QUESTIONS = [
     "Tell me about a time you exceeded expectations.",
     "How do you handle multiple responsibilities?",
     "What do you hope to learn in your next role?",
+
+    # ── Self-awareness & Personality (20) ────────────────────────────────
+    "How would your closest friends describe you?",
+    "How would your previous manager describe you?",
+    "What makes you unique compared to other candidates?",
+    "What kind of people do you find it hard to work with?",
+    "Are you more of a leader or a follower? Give an example.",
+    "Do you prefer working independently or in a team?",
+    "Describe yourself in three words.",
+    "What is the biggest risk you have ever taken?",
+    "How do you react when things don't go as planned?",
+    "Do you consider yourself detail-oriented or a big-picture thinker?",
+    "What does work-life balance mean to you?",
+    "How do you define professionalism?",
+    "What is something most people don't know about you?",
+    "How do you handle ambiguity in the workplace?",
+    "What type of tasks energize you the most?",
+    "What type of tasks drain your energy?",
+    "How important is recognition to you at work?",
+    "Describe a time you had to step outside your comfort zone.",
+    "How do you respond to high-pressure situations?",
+    "What is your approach to taking calculated risks?",
+
+    # ── Motivation & Culture Fit (20) ────────────────────────────────────
+    "What attracted you to apply for this position?",
+    "What do you know about our company culture?",
+    "How do our company values align with yours?",
+    "What type of company culture brings out the best in you?",
+    "Would you rather have a high salary with average work or average salary with work you love?",
+    "What keeps you engaged at work long-term?",
+    "How do you feel about remote work versus in-office work?",
+    "What non-monetary benefits are most important to you?",
+    "What would make you leave a job?",
+    "What does your dream job look like?",
+    "How do you feel about working overtime when needed?",
+    "What excites you most about this role?",
+    "Are you willing to relocate if required?",
+    "What factors are most important when evaluating a job offer?",
+    "What would make this role the perfect fit for you?",
+    "How soon would you be available to start?",
+    "What do you do outside of work to recharge?",
+    "How do you feel about company politics?",
+    "What is the most important thing a company can do for its employees?",
+    "How does this role fit into your long-term career plan?",
+
+    # ── Situational & Behavioral (30) ────────────────────────────────────
+    "Tell me about a time you had to deliver bad news to someone.",
+    "Describe a situation where you had to work with a very different personality.",
+    "Tell me about a time you had to manage multiple projects simultaneously.",
+    "Describe a time when you identified a problem before it became serious.",
+    "Tell me about a time you had to make a decision with incomplete information.",
+    "Describe a project you are most proud of.",
+    "Tell me about a time you had to work under minimal supervision.",
+    "Describe a time when your communication skills made a difference.",
+    "Tell me about a time you successfully managed a difficult client or customer.",
+    "Describe a situation where you had to change your approach mid-project.",
+    "Tell me about a time you had to defend your opinion professionally.",
+    "Describe a time when you went above and beyond your job description.",
+    "Tell me about a time you had to train or mentor someone.",
+    "Describe a situation where teamwork led to a better outcome.",
+    "Tell me about a time when you had to quickly adapt to a major change.",
+    "Describe a time you had to work with limited resources.",
+    "Tell me about a time you turned a negative situation into a positive one.",
+    "Describe a situation where you had to juggle competing priorities.",
+    "Tell me about a time a project didn't go as planned and what you did.",
+    "Describe a time when you had to collaborate with someone in a different department.",
+    "Tell me about a time you had to set a boundary at work.",
+    "Describe a time when you used data or research to make a decision.",
+    "Tell me about a time you had to be flexible with your schedule.",
+    "Describe a moment when you realized you needed to ask for help.",
+    "Tell me about a time you had to handle a confidential situation.",
+    "Describe a time you received unexpected feedback and how you responded.",
+    "Tell me about a time you had to motivate a discouraged teammate.",
+    "Describe a situation where you had to meet a goal you initially thought was unrealistic.",
+    "Tell me about a time you had to work on a task you were unfamiliar with.",
+    "Describe a time you had to represent your team in a difficult conversation.",
+
+    # ── Career Development (20) ───────────────────────────────────────────
+    "What professional skills are you most proud of?",
+    "What certifications or courses have you recently completed?",
+    "How do you keep up with industry trends?",
+    "What is the most valuable lesson you've learned in your career so far?",
+    "Who has been the biggest influence on your professional development?",
+    "What does your ideal career path look like over the next 10 years?",
+    "Have you ever changed career direction? If so, why?",
+    "What is the most challenging project you have worked on?",
+    "Describe a skill you developed that you didn't expect to need.",
+    "What is the biggest gap in your current skill set?",
+    "How do you seek out opportunities for professional growth?",
+    "What would you do differently in your career if you could start over?",
+    "Have you ever taken on responsibilities outside your job description? Describe it.",
+    "What professional achievement are you still working toward?",
+    "How have your career goals changed over the past few years?",
+    "What is the best piece of career advice you have ever received?",
+    "How do you measure your own professional success?",
+    "What is a professional weakness you have actively worked to improve?",
+    "Describe a time you took on a leadership role unexpectedly.",
+    "What would you want your professional legacy to be?",
+
+    # ── Ethical & Values-Based (20) ──────────────────────────────────────
+    "Describe a time when you faced an ethical dilemma at work.",
+    "How do you handle situations where you disagree with company policy?",
+    "What would you do if you witnessed a colleague acting unethically?",
+    "How do you ensure fairness in your professional decisions?",
+    "Describe a time you had to make an unpopular decision.",
+    "How do you handle situations where you are asked to do something against your values?",
+    "What does integrity mean to you in a professional context?",
+    "Have you ever had to report a problem to management? How did you handle it?",
+    "How do you ensure diversity and inclusion in your work environment?",
+    "Describe a time you stood up for what was right at work.",
+    "How transparent are you with your team about mistakes?",
+    "What would you do if your manager asked you to cut corners on a project?",
+    "How do you build trust with your colleagues?",
+    "Describe a time you had to be honest even when it was uncomfortable.",
+    "How do you handle situations where credit is not given appropriately?",
+    "What role does accountability play in your work ethic?",
+    "How do you approach situations where the rules seem unfair?",
+    "Describe a time you had to maintain confidentiality under pressure.",
+    "How do you ensure your personal biases don't affsect your decisions at work?",
+    "What does responsible leadership mean to you?",
 ]
 
 
 class Command(BaseCommand):
-    help = "Seed 50 HR interview questions"
+    help = "Seed 200 HR interview questions"
 
     def handle(self, *args, **kwargs):
         created_count = 0
+        skipped_count = 0
 
         for q in HR_QUESTIONS:
             _, created = Question.objects.get_or_create(
@@ -72,10 +192,14 @@ class Command(BaseCommand):
                     "is_active": True,
                 }
             )
-
             if created:
                 created_count += 1
+            else:
+                skipped_count += 1
 
         self.stdout.write(
-            self.style.SUCCESS(f"Successfully seeded {created_count} HR questions.")
+            self.style.SUCCESS(
+                f"Done! {created_count} questions added, {skipped_count} already existed. "
+                f"Total in list: {len(HR_QUESTIONS)}."
+            )
         )
