@@ -208,9 +208,9 @@ __marimo__/
 
 # Frontend (Node / Vite / TypeScript)
 node_modules/
+.vite/
 dist/
 build/
-.vite/
 *.tsbuildinfo
 
 # Frontend logs
@@ -222,7 +222,7 @@ pnpm-debug.log*
 # Frontend testing / coverage
 coverage/
 
-# Frontend env files
+# Frontend local env files
 .env.local
 .env.development.local
 .env.test.local
