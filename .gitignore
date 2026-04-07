@@ -3,6 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+adapters/
+
 # C extensions
 *.so
 
@@ -228,3 +230,4 @@ coverage/
 .env.test.local
 .env.production.local
 .env
+

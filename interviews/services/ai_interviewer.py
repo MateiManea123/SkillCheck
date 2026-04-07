@@ -1,67 +1,156 @@
 import json
 import os
+from typing import Any
+
+import torch
 from dotenv import load_dotenv
-from openai import OpenAI
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 load_dotenv()
 
 
+class LocalAdapterManager:
+    def __init__(self):
+        self.base_model = os.getenv(
+            "LOCAL_BASE_MODEL",
+            "meta-llama/Llama-3.2-3B-Instruct",
+        )
+
+        self.max_seq_length = int(os.getenv("LOCAL_MAX_SEQ_LENGTH", "2048"))
+        self.load_in_4bit = os.getenv("LOCAL_LOAD_IN_4BIT", "true").lower() == "true"
+        self.hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN")
+
+        self.adapters = {
+            "interviewer": os.getenv("INTERVIEWER_ADAPTER_PATH", "ft_interviewer_llama32_3b"),
+            "evaluator": os.getenv("EVALUATOR_ADAPTER_PATH", "ft_evaluator_llama32_3b"),
+            "summary": os.getenv("SUMMARY_ADAPTER_PATH", "ft_summary_llama32_3b"),
+        }
+
+        self.model = None
+        self.tokenizer = None
+        self.current_adapter_name = None
+        self.adapter_cache: dict[str, tuple[Any, Any]] = {}
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.dtype = torch.float16 if self.device == "mps" else torch.float32
+
+    def _load_base_model(self):
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.base_model,
+            token=self.hf_token,
+            trust_remote_code=True,
+        )
+
+        if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        model = AutoModelForCausalLM.from_pretrained(
+            self.base_model,
+            token=self.hf_token,
+            torch_dtype=self.dtype,
+            trust_remote_code=True,
+        ).to(self.device)
+        model.eval()
+
+        return model, tokenizer
+
+    def load_adapter(self, adapter_name: str):
+        if adapter_name not in self.adapters:
+            raise ValueError(f"Unknown adapter '{adapter_name}'")
+
+        cached = self.adapter_cache.get(adapter_name)
+        if cached is not None:
+            self.model, self.tokenizer = cached
+            self.current_adapter_name = adapter_name
+            return self.model, self.tokenizer
+
+        adapter_path = self.adapters[adapter_name]
+
+        if not os.path.exists(adapter_path):
+            raise FileNotFoundError(
+                f"Adapter path not found for '{adapter_name}': {adapter_path}"
+            )
+
+        # Reîncărcăm complet modelul dacă vrem maximă siguranță.
+        # E mai lent, dar evită surprize când schimbi adaptoarele.
+        if self.current_adapter_name != adapter_name:
+            base_model, tokenizer = self._load_base_model()
+
+            self.model = PeftModel.from_pretrained(
+                base_model,
+                adapter_path,
+                is_trainable=False,
+            )
+            self.model.eval()
+            self.tokenizer = tokenizer
+            self.current_adapter_name = adapter_name
+            self.adapter_cache[adapter_name] = (self.model, self.tokenizer)
+
+        return self.model, self.tokenizer
+
+
 class AIInterviewService:
     def __init__(self):
-        provider = os.getenv("LLM_PROVIDER", "auto").lower()
+        provider = os.getenv("LLM_PROVIDER", "local").lower()
 
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
-        if provider == "auto":
-            if endpoint and api_key and azure_deployment:
-                provider = "azure"
-            else:
-                provider = "ollama"
-
-        if provider == "azure":
-            if not endpoint:
-                raise ValueError("AZURE_OPENAI_ENDPOINT is missing")
-            if not api_key:
-                raise ValueError("AZURE_OPENAI_API_KEY is missing")
-            if not azure_deployment:
-                raise ValueError("AZURE_OPENAI_DEPLOYMENT is missing")
-
-            self.model = azure_deployment
-            self.client = OpenAI(
-                api_key=api_key, base_url=f"{endpoint.rstrip('/')}/openai/v1/"
+        if provider != "local":
+            raise ValueError(
+                "This version supports only LLM_PROVIDER=local. "
+                "Use the previous implementation for azure/ollama."
             )
-            return
 
-        if provider == "ollama":
-            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-            ollama_api_key = os.getenv("OLLAMA_API_KEY", "ollama")
+        self.local_manager = LocalAdapterManager()
+        self.default_max_new_tokens = int(os.getenv("LOCAL_MAX_NEW_TOKENS", "256"))
 
-            self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-            self.client = OpenAI(
-                api_key=ollama_api_key,
-                base_url=ollama_base_url.rstrip("/"),
-            )
-            return
+    def _build_messages(self, system_prompt: str, user_prompt: str) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": system_prompt.strip()},
+            {"role": "user", "content": user_prompt.strip()},
+        ]
 
-        raise ValueError(
-            "Invalid LLM_PROVIDER. Use one of: auto, azure, ollama"
-        )
-
-    def _chat(
-        self, system_prompt: str, user_prompt: str, temperature: float = 0.4
+    def _generate_local(
+        self,
+        adapter_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        max_new_tokens: int | None = None,
     ) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=temperature,
+        model, tokenizer = self.local_manager.load_adapter(adapter_name)
+
+        messages = self._build_messages(system_prompt, user_prompt)
+
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
         )
-        content = response.choices[0].message.content or ""
+
+        inputs = tokenizer(text, return_tensors="pt").to(self.local_manager.device)
+
+        gen_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens or self.default_max_new_tokens,
+            "temperature": temperature,
+            "pad_token_id": tokenizer.eos_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+        }
+
+        if temperature <= 0:
+            gen_kwargs["do_sample"] = False
+            gen_kwargs.pop("temperature", None)
+        else:
+            gen_kwargs["do_sample"] = True
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                **gen_kwargs,
+            )
+
+        generated_tokens = outputs[0][inputs["input_ids"].shape[1]:]
+        content = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+
         return content.strip()
 
     def rewrite_question(
@@ -71,45 +160,54 @@ class AIInterviewService:
         previous_answer: str | None = None,
     ) -> str:
         system_prompt = """
-            You are a professional interviewer conducting a real job interview.
+You are a professional interviewer conducting a real job interview.
 
-            Your tone should be:
-            - professional
-            - neutral
-            - slightly conversational
-            - respectful
-            - concise
+Your tone should be:
+- professional
+- neutral
+- concise
+- respectful
 
-            Do not be overly friendly.
-            Do not sound robotic.
-            Do not overpraise the candidate.
+Never be warm, enthusiastic, or congratulatory.
+Do not validate the candidate's previous answer.
+Do not provide feedback about answer quality.
 
-            Task:
-            Rewrite the next interview question so it sounds natural in a real interview.
+Forbidden styles/examples:
+- "That's great..."
+- "Great approach..."
+- "Thank you for sharing..."
+- "It's great to hear..."
 
-            Rules:
-            - Keep the meaning of the original question.
-            - If a previous answer is provided, briefly acknowledge it in one short sentence.
-            - Then transition naturally to the next question.
-            - Ask exactly one question.
-            - Keep the whole output short.
-            - Return only the final interviewer message.
-                    """.strip()
+Task:
+Rewrite the next interview question so it sounds natural in a real interview.
+
+Rules:
+- Keep the meaning of the original question.
+- If a previous answer is provided, add at most one short neutral bridge sentence.
+- The bridge sentence must not include praise, thanks, or judgement.
+- Then ask the next question directly.
+- Ask exactly one question.
+- Keep the whole output short (1-2 sentences max).
+- Return only the final interviewer message.
+        """.strip()
 
         user_prompt = f"""
-            Interview type: {interview_type}
+Interview type: {interview_type}
 
-            Previous candidate answer:
-            {previous_answer or "No previous answer provided."}
+Previous candidate answer:
+{previous_answer or "No previous answer provided."}
 
-            Original next question:
-            {question_text}
-                    """.strip()
+Original next question:
+{question_text}
+        """.strip()
 
-        print("---------System prompt:---------", system_prompt)
-        print("----------  User prompt:----------", user_prompt)
-
-        return self._chat(system_prompt, user_prompt, temperature=0.5)
+        return self._generate_local(
+            adapter_name="interviewer",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.5,
+            max_new_tokens=120,
+        )
 
     def evaluate_answer_and_followup(
         self,
@@ -119,47 +217,65 @@ class AIInterviewService:
         history: list[dict] | None = None,
     ) -> dict:
         system_prompt = """
-            You are a professional interviewer evaluating a candidate answer.
+You are a professional interviewer evaluating a candidate answer.
 
-            Your job:
-            1. Evaluate the answer quality.
-            2. Decide if one follow-up question is needed.
-            3. If needed, write one concise follow-up in a professional, neutral interview tone.
+Your job:
+1. Evaluate the answer quality.
+2. Decide if one follow-up question is needed.
+3. If needed, write one concise follow-up in a professional, neutral interview tone.
 
-            Rules:
-            - Be strict but fair.
-            - Ask a follow-up only if the answer is vague, incomplete, evasive, too generic, or misses the main point.
-            - Do not ask follow-up for every weak answer.
-            - Assume only one follow-up is allowed for a base question.
-            - Follow-up must be short and natural.
-            - Do not be overly friendly.
-            - Return strict JSON only.
+Rules:
+- Be strict but fair.
+- Ask a follow-up only when missing information blocks a fair evaluation of the core competency.
+- Do not ask follow-up for minor missing detail.
+- Do not ask follow-up if the answer is still gradable.
+- Prefer `needs_followup=false` unless clarification is truly necessary.
+- Score-to-follow-up policy (to keep in mind):
+    - If score is 8-10: `needs_followup` must be false.
+    - If score is 7: follow-up is optional, but default to false unless a key point is missing.
+    - If score is 6 or below: `needs_followup` should usually be true when clarification can change evaluation.
+- Assume only one follow-up is allowed for a base question.
+- Follow-up must be short, neutral, and specific.
+- Avoid repeating the same question with different wording.
+- Prefer a nearby angle (context, decision criteria, impact, trade-off) instead of asking for "more details".
+- Do not ask for concrete examples by default.
+- Avoid phrases like "Can you give/provide an example" unless strictly required.
+- Only ask for an example when score <= 5 and the answer is too abstract to evaluate the core competency.
+- When score is 6-7, prefer clarification questions about reasoning, trade-offs, constraints, or outcomes (not example requests).
+- Do not be friendly or congratulatory.
+- Return strict JSON only.
 
-            JSON schema:
-            {
-            "score": 1,
-            "feedback": "short feedback",
-            "needs_followup": false,
-            "followup_question": ""
-            }
-                    """.strip()
+JSON schema:
+{
+    "score": 1,
+  "feedback": "short feedback",
+  "needs_followup": false,
+  "followup_question": ""
+}
+        """.strip()
 
         history_text = json.dumps(history or [], ensure_ascii=False)
 
         user_prompt = f"""
-            Interview type: {interview_type}
+Interview type: {interview_type}
 
-            Conversation history:
-            {history_text}
+Conversation history:
+{history_text}
 
-            Question:
-            {question_text}
+Question:
+{question_text}
 
-            Candidate answer:
-            {answer_text}
-                    """.strip()
+Candidate answer:
+{answer_text}
+        """.strip()
 
-        raw = self._chat(system_prompt, user_prompt, temperature=0.2)
+        raw = self._generate_local(
+            adapter_name="evaluator",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.2,
+            max_new_tokens=220,
+        )
 
         try:
             data = json.loads(raw)
@@ -184,27 +300,33 @@ class AIInterviewService:
         qa_pairs: list[dict],
     ) -> dict:
         system_prompt = """
-            You are a professional interviewer.
+You are a professional interviewer.
 
-            Given the full interview, provide a concise final evaluation.
+Given the full interview, provide a concise final evaluation.
 
-            Return strict JSON only with this schema:
-            {
-            "overall_score": 1,
-            "summary": "short paragraph",
-            "strengths": ["item 1", "item 2"],
-            "improvements": ["item 1", "item 2"]
-            }
-                    """.strip()
+Return strict JSON only with this schema:
+{
+  "overall_score": 1,
+  "summary": "short paragraph",
+  "strengths": ["item 1", "item 2"],
+  "improvements": ["item 1", "item 2"]
+}
+        """.strip()
 
         user_prompt = f"""
-            Interview type: {interview_type}
+Interview type: {interview_type}
 
-            Interview transcript:
-            {json.dumps(qa_pairs, ensure_ascii=False)}
-                    """.strip()
+Interview transcript:
+{json.dumps(qa_pairs, ensure_ascii=False)}
+        """.strip()
 
-        raw = self._chat(system_prompt, user_prompt, temperature=0.2)
+        raw = self._generate_local(
+            adapter_name="summary",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.2,
+            max_new_tokens=300,
+        )
 
         try:
             return json.loads(raw)

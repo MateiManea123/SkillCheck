@@ -12,6 +12,16 @@ from interviews.models import Session,Question,SessionQuestion,Answer
 import random
 from .services.ai_interviewer import AIInterviewService
 
+
+_AI_SERVICE: AIInterviewService | None = None
+
+
+def get_ai_service() -> AIInterviewService:
+    global _AI_SERVICE
+    if _AI_SERVICE is None:
+        _AI_SERVICE = AIInterviewService()
+    return _AI_SERVICE
+
 def homepage(request):
     return render(request, 'home.html')
     # return HttpResponse("Hello, world. You're at the polls page.")
@@ -83,7 +93,7 @@ def current_question(request,session_id):
         return Response({"error": "No current question"}, status=status.HTTP_404_NOT_FOUND)
 
     if not session_question.display_text:
-        ai=AIInterviewService()
+        ai = get_ai_service()
         if session_question.question:
             original_text = session_question.question.text
             rewritten = ai.rewrite_question(my_session.interview_type, original_text,previous_answer)
@@ -129,7 +139,7 @@ def submit_answer(request,session_id):
     )
     question_text = current_question.display_text or (current_question.question.text if current_question.question else "")
 
-    ai = AIInterviewService()
+    ai = get_ai_service()
     ai_result = ai.evaluate_answer_and_followup(
         interview_type=my_session.interview_type,
         question_text=question_text,
@@ -184,6 +194,37 @@ def submit_answer(request,session_id):
     })
 
 
+@api_view(["POST"])
+def end_session(request, session_id):
+    try:
+        my_session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        return Response("Session not found", status=status.HTTP_404_NOT_FOUND)
+
+    if my_session.status == "FINISHED":
+        return Response(
+            {
+                "message": "Session already finished",
+                "session_status": my_session.status,
+                "session_id": my_session.id,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    my_session.status = "FINISHED"
+    my_session.ended_at = timezone.now()
+    my_session.save(update_fields=["status", "ended_at"])
+
+    return Response(
+        {
+            "message": "Session ended",
+            "session_status": my_session.status,
+            "session_id": my_session.id,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 @api_view(["GET"])
 def session_details(request,session_id):
     my_session = Session.objects.get(id=session_id)
@@ -191,17 +232,20 @@ def session_details(request,session_id):
         return Response("Session not found",status=status.HTTP_404_NOT_FOUND)
     session_questions = SessionQuestion.objects.filter(session=my_session).order_by("order")
     questions_data = []
-    for session_question in session_questions:
 
+    for session_question in session_questions:
         answer = Answer.objects.filter(session_question=session_question).first()
         questions_data.append({
             "question_text": session_question.display_text,
             "answer_text": answer.text if answer else None
         })
-        ai = AIInterviewService()
-        ai_feedback = ai.generate_final_session_feedback(
-            interview_type=my_session.interview_type,
-            qa_pairs=questions_data)
+
+    ai = get_ai_service()
+    ai_feedback = ai.generate_final_session_feedback(
+        interview_type=my_session.interview_type,
+        qa_pairs=questions_data,
+    )
+
     session_data = {
         "session_id": session_id,
         "status": my_session.status,

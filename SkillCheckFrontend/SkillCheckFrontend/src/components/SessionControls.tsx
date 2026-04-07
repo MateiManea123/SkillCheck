@@ -4,6 +4,7 @@ import type { InterviewType, LevelType, RoleType, StartSessionPayload } from "..
 interface SessionControlsProps {
   loading: boolean;
   onStart: (payload: StartSessionPayload) => void;
+  onEnd: () => void;
   sessionId: number | null;
   disabled?: boolean;
 }
@@ -12,7 +13,7 @@ const INTERVIEW_TYPES: InterviewType[] = ["TECHNICAL", "HR"];
 const ROLES: RoleType[] = ["FRONTEND", "BACKEND"];
 const LEVELS: LevelType[] = ["JUNIOR", "MID", "SENIOR"];
 
-export function SessionControls({ loading, onStart, sessionId, disabled = false }: SessionControlsProps) {
+export function SessionControls({ loading, onStart, onEnd, sessionId, disabled = false }: SessionControlsProps) {
   const [interviewType, setInterviewType] = useState<InterviewType>("TECHNICAL");
   const [role, setRole] = useState<RoleType>("FRONTEND");
   const [level, setLevel] = useState<LevelType>("JUNIOR");
@@ -113,13 +114,26 @@ export function SessionControls({ loading, onStart, sessionId, disabled = false 
         )}
       </div>
 
-      <button
-        className="mt-5 inline-flex items-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-        onClick={handleStart}
-        disabled={loading || disabled}
-      >
-        {loading ? "Starting..." : "Start Session"}
-      </button>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={handleStart}
+          disabled={loading || disabled}
+        >
+          {loading && !sessionId ? "Starting..." : "Start Session"}
+        </button>
+
+        {!!sessionId && (
+          <button
+            type="button"
+            onClick={onEnd}
+            disabled={loading}
+            className="inline-flex items-center rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-bold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Ending..." : "End Session"}
+          </button>
+        )}
+      </div>
 
       {sessionId && (
         <p className="mt-3 text-sm text-slate-600">

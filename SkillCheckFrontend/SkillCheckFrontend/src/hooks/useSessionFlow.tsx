@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  endSession,
   startSession,
   getCurrentQuestion,
   submitAnswer,
@@ -9,12 +10,31 @@ import {
 } from "../api/sessionsApi";
 import type {
   CurrentQuestionResponse,
+  EndSessionResponse,
   SessionDetailsResponse,
   StartSessionPayload,
   SubmitAnswerResponse,
 } from "../types/session";
 
 const STORAGE_KEY = "skillcheck.session.flow.v1";
+
+function isRetryableAxiosError(error: AxiosError | null | undefined): boolean {
+  if (!error) return false;
+
+  const code = error.code ?? "";
+  const status = error.response?.status;
+
+  return (
+    code === "ECONNABORTED" ||
+    code === "ERR_NETWORK" ||
+    status === 408 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
 
 interface PersistedSessionFlow {
   sessionId: number | null;
@@ -79,7 +99,8 @@ export function useSessionFlow() {
     enabled: !!sessionId && !sessionFinished,
     queryFn: () => getCurrentQuestion(sessionId as number),
     refetchOnWindowFocus: false,
-    retry: 1,
+    retry: (failureCount, error) => isRetryableAxiosError(error) && failureCount < 4,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 15000),
   });
 
   const startSessionMutation = useMutation({
@@ -138,15 +159,28 @@ export function useSessionFlow() {
     },
   });
 
+  const endSessionMutation = useMutation<EndSessionResponse, AxiosError, number>({
+    mutationFn: (activeSessionId) => endSession(activeSessionId),
+    onSuccess: (data) => {
+      setSessionFinished(true);
+      setCompletedSessionId(data.session_id);
+      setFinishedSessionId(data.session_id);
+      setSessionId(null);
+      setAnswer("");
+    },
+  });
+
   const sessionDataQuery = useQuery<SessionDetailsResponse, AxiosError>({
     queryKey: ["sessionData", finishedSessionId],
     enabled: sessionFinished && !!finishedSessionId && !cachedSessionData,
     queryFn: () => getSessionData(finishedSessionId as number),
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
+    refetchInterval: sessionFinished && !!finishedSessionId && !cachedSessionData ? 10000 : false,
     staleTime: Infinity,
-    retry: false,
+    retry: (failureCount, error) => isRetryableAxiosError(error) && failureCount < 12,
+    retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 30000),
   });
 
   useEffect(() => {
@@ -161,12 +195,6 @@ export function useSessionFlow() {
       setFinishedSessionId(null);
     }
   }, [finalFeedbackRefetchCount, sessionDataQuery.data, sessionDataQuery.refetch]);
-
-  useEffect(() => {
-    if (sessionDataQuery.error && finishedSessionId) {
-      setFinishedSessionId(null);
-    }
-  }, [finishedSessionId, sessionDataQuery.error]);
 
   useEffect(() => {
     const next: PersistedSessionFlow = {
@@ -221,6 +249,7 @@ export function useSessionFlow() {
     startSessionMutation.isPending ||
     currentQuestionQuery.isLoading ||
     submitAnswerMutation.isPending ||
+    endSessionMutation.isPending ||
     sessionDataQuery.isLoading;
 
   return {
@@ -239,12 +268,17 @@ export function useSessionFlow() {
       start: startSessionMutation.error,
       question: currentQuestionQuery.error,
       submit: submitAnswerMutation.error,
+      end: endSessionMutation.error,
       sessionData: sessionDataQuery.error,
     },
 
     actions: {
       startSession: (payload: StartSessionPayload) => startSessionMutation.mutate(payload),
       submitAnswer: () => submitAnswerMutation.mutate(answer),
+      endSession: () => {
+        if (!sessionId || endSessionMutation.isPending) return;
+        endSessionMutation.mutate(sessionId);
+      },
       retryFinalFeedback,
     },
 

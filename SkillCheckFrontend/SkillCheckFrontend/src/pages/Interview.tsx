@@ -65,12 +65,14 @@ export function Interview() {
       <SessionControls
         loading={loading}
         onStart={actions.startSession}
+        onEnd={actions.endSession}
         sessionId={sessionId}
         disabled={!!sessionId && !sessionFinished}
       />
 
       {errors.start && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">Could not start the session.</p>}
       {errors.submit && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">Could not submit the answer.</p>}
+      {errors.end && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">Could not end the session.</p>}
 
       <QuestionCard
         question={question}

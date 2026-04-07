@@ -36,6 +36,12 @@ export interface SubmitAnswerResponse {
   next_index: number;
 }
 
+export interface EndSessionResponse {
+  message: string;
+  session_status: SessionStatus;
+  session_id: number;
+}
+
 export interface SessionQuestionSummary {
   question_text: string;
   answer_text: string | null;
