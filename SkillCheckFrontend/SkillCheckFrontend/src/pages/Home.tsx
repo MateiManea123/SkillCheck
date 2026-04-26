@@ -14,8 +14,8 @@ export function Home() {
           </h1>
 
           <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-            Choose interview type, role, and level. Answer questions one by one, then receive structured AI feedback at
-            the end of the session.
+            Configure your session first, then jump into a dedicated live chat interview room with AI follow-ups and
+            structured final feedback.
           </p>
 
           <div className="flex flex-wrap gap-3">
@@ -23,7 +23,7 @@ export function Home() {
               to="/interview"
               className="rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 px-6 py-3 text-sm font-bold text-white shadow-md shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:from-sky-600 hover:to-indigo-600 hover:shadow-lg"
             >
-              Start Interview
+              Configure Interview
             </Link>
             <Link
               to="/about"
@@ -36,10 +36,10 @@ export function Home() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-3">
-        {[
-          { title: "Start Session", text: "Create a new interview session in one click." },
-          { title: "Answer Questions", text: "Receive dynamic questions and reply in sequence." },
-          { title: "Get AI Feedback", text: "Review score, strengths, and improvement areas." },
+          {[
+          { title: "Setup", text: "Choose interview type and seniority before entering the room." },
+          { title: "Chat Interview", text: "Answer in a focused conversation flow, question by question." },
+          { title: "Final Review", text: "Get score, strengths, and concrete improvement directions." },
         ].map((item, index) => (
           <article
             key={item.title}

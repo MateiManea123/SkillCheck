@@ -25,7 +25,12 @@ export function SessionSummary({
 
   return (
     <section className="animate-fade-up rounded-3xl border border-emerald-200 bg-white/85 p-6 shadow-xl shadow-emerald-100/60">
-      <h2 className="text-xl font-bold text-slate-900">Session Completed</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-slate-900">Session Completed</h2>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+          Step 3: Review
+        </span>
+      </div>
       <p className="mt-2 text-sm text-slate-600">
         <b>Answers submitted:</b> {nrAnswers}
       </p>

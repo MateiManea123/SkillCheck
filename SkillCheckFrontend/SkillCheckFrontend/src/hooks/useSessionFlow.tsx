@@ -6,12 +6,10 @@ import {
   startSession,
   getCurrentQuestion,
   submitAnswer,
-  getSessionData,
 } from "../api/sessionsApi";
 import type {
   CurrentQuestionResponse,
   EndSessionResponse,
-  SessionDetailsResponse,
   StartSessionPayload,
   SubmitAnswerResponse,
 } from "../types/session";
@@ -45,7 +43,7 @@ interface PersistedSessionFlow {
   nrAnswers: number;
   totalQuestions: number;
   lastAnswerFeedback: SubmitAnswerResponse | null;
-  cachedSessionData: SessionDetailsResponse | null;
+  feedbackHistory: SubmitAnswerResponse[];
 }
 
 const defaultState: PersistedSessionFlow = {
@@ -57,7 +55,7 @@ const defaultState: PersistedSessionFlow = {
   nrAnswers: 0,
   totalQuestions: 0,
   lastAnswerFeedback: null,
-  cachedSessionData: null,
+  feedbackHistory: [],
 };
 
 function loadPersistedState(): PersistedSessionFlow {
@@ -75,11 +73,6 @@ function loadPersistedState(): PersistedSessionFlow {
   }
 }
 
-function hasFormattingFailure(data: SessionDetailsResponse | null | undefined): boolean {
-  const summary = data?.ai_feedback?.summary?.toLowerCase() ?? "";
-  return summary.includes("formatting failed");
-}
-
 export function useSessionFlow() {
   const [initialState] = useState<PersistedSessionFlow>(() => loadPersistedState());
   const [sessionId, setSessionId] = useState<number | null>(initialState.sessionId);
@@ -91,8 +84,7 @@ export function useSessionFlow() {
   const [nrAnswers, setNrAnswers] = useState(initialState.nrAnswers);
   const [totalQuestions, setTotalQuestions] = useState(initialState.totalQuestions);
   const [lastAnswerFeedback, setLastAnswerFeedback] = useState<SubmitAnswerResponse | null>(initialState.lastAnswerFeedback);
-  const [cachedSessionData, setCachedSessionData] = useState<SessionDetailsResponse | null>(initialState.cachedSessionData);
-  const [finalFeedbackRefetchCount, setFinalFeedbackRefetchCount] = useState(0);
+  const [feedbackHistory, setFeedbackHistory] = useState<SubmitAnswerResponse[]>(initialState.feedbackHistory);
 
   const currentQuestionQuery = useQuery<CurrentQuestionResponse, AxiosError>({
     queryKey: ["currentQuestion", sessionId],
@@ -111,8 +103,7 @@ export function useSessionFlow() {
       setCompletedSessionId(null);
       setFinishedSessionId(null);
       setLastAnswerFeedback(null);
-      setCachedSessionData(null);
-      setFinalFeedbackRefetchCount(0);
+      setFeedbackHistory([]);
 
       setSessionId(data.session_id);
       setTotalQuestions(data.total_questions);
@@ -137,6 +128,7 @@ export function useSessionFlow() {
     },
     onSuccess: async (data) => {
       setLastAnswerFeedback(data);
+      setFeedbackHistory((prev) => [...prev, data]);
       setNrAnswers(data.next_index);
 
       let updatedTotalQuestions = totalQuestions;
@@ -150,6 +142,7 @@ export function useSessionFlow() {
         setCompletedSessionId(sessionId);
         setFinishedSessionId(sessionId);
         setSessionId(null);
+        setAnswer("");
         return;
       }
 
@@ -170,32 +163,6 @@ export function useSessionFlow() {
     },
   });
 
-  const sessionDataQuery = useQuery<SessionDetailsResponse, AxiosError>({
-    queryKey: ["sessionData", finishedSessionId],
-    enabled: sessionFinished && !!finishedSessionId && !cachedSessionData,
-    queryFn: () => getSessionData(finishedSessionId as number),
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: true,
-    refetchInterval: sessionFinished && !!finishedSessionId && !cachedSessionData ? 10000 : false,
-    staleTime: Infinity,
-    retry: (failureCount, error) => isRetryableAxiosError(error) && failureCount < 12,
-    retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 30000),
-  });
-
-  useEffect(() => {
-    if (sessionDataQuery.data) {
-      if (hasFormattingFailure(sessionDataQuery.data) && finalFeedbackRefetchCount < 1) {
-        setFinalFeedbackRefetchCount(1);
-        void sessionDataQuery.refetch();
-        return;
-      }
-
-      setCachedSessionData(sessionDataQuery.data);
-      setFinishedSessionId(null);
-    }
-  }, [finalFeedbackRefetchCount, sessionDataQuery.data, sessionDataQuery.refetch]);
-
   useEffect(() => {
     const next: PersistedSessionFlow = {
       sessionId,
@@ -206,11 +173,11 @@ export function useSessionFlow() {
       nrAnswers,
       totalQuestions,
       lastAnswerFeedback,
-      cachedSessionData,
+      feedbackHistory,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, [answer, cachedSessionData, completedSessionId, finishedSessionId, lastAnswerFeedback, nrAnswers, sessionFinished, sessionId, totalQuestions]);
+  }, [answer, completedSessionId, feedbackHistory, finishedSessionId, lastAnswerFeedback, nrAnswers, sessionFinished, sessionId, totalQuestions]);
 
   useEffect(() => {
     const error = currentQuestionQuery.error;
@@ -226,50 +193,31 @@ export function useSessionFlow() {
     }
   }, [currentQuestionQuery.error, sessionId]);
 
-  const currentSessionData = cachedSessionData ?? sessionDataQuery.data;
-
-  const retryFinalFeedback = () => {
-    const retrySessionId = completedSessionId ?? finishedSessionId;
-    if (!retrySessionId || sessionDataQuery.isFetching) return;
-
-    setCachedSessionData(null);
-    setFinalFeedbackRefetchCount(0);
-    setFinishedSessionId(retrySessionId);
-
-    void sessionDataQuery.refetch();
-  };
-
-  const canRetryFinalFeedback =
-    !!(completedSessionId ?? finishedSessionId) &&
-    !!sessionFinished &&
-    !sessionDataQuery.isFetching &&
-    (!!sessionDataQuery.error || hasFormattingFailure(currentSessionData));
-
   const loading =
     startSessionMutation.isPending ||
     currentQuestionQuery.isLoading ||
     submitAnswerMutation.isPending ||
-    endSessionMutation.isPending ||
-    sessionDataQuery.isLoading;
+    endSessionMutation.isPending;
 
   return {
     sessionId,
     answer,
     setAnswer,
     sessionFinished,
+    completedSessionId,
     nrAnswers,
     totalQuestions,
     lastAnswerFeedback,
+    feedbackHistory,
 
     question: currentQuestionQuery.data,
-    sessionData: currentSessionData,
 
     errors: {
       start: startSessionMutation.error,
       question: currentQuestionQuery.error,
       submit: submitAnswerMutation.error,
       end: endSessionMutation.error,
-      sessionData: sessionDataQuery.error,
+      sessionData: null,
     },
 
     actions: {
@@ -279,11 +227,13 @@ export function useSessionFlow() {
         if (!sessionId || endSessionMutation.isPending) return;
         endSessionMutation.mutate(sessionId);
       },
-      retryFinalFeedback,
+      retryFinalFeedback: () => {},
     },
 
-    canRetryFinalFeedback,
-    finalFeedbackLoading: sessionDataQuery.isFetching,
+    canRetryFinalFeedback: false,
+    finalFeedbackLoading: false,
+    isSubmitting: submitAnswerMutation.isPending,
+    isQuestionFetching: currentQuestionQuery.isFetching,
 
     loading,
   };

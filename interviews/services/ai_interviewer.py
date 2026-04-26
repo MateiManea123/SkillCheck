@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from typing import Any
 
 import torch
@@ -12,6 +13,10 @@ load_dotenv()
 
 
 class LocalAdapterManager:
+    _shared_adapter_cache: dict[str, tuple[Any, Any]] = {}
+    _shared_adapter_locks: dict[str, threading.Lock] = {}
+    _shared_lock = threading.Lock()
+
     def __init__(self):
         self.base_model = os.getenv(
             "LOCAL_BASE_MODEL",
@@ -31,7 +36,6 @@ class LocalAdapterManager:
         self.model = None
         self.tokenizer = None
         self.current_adapter_name = None
-        self.adapter_cache: dict[str, tuple[Any, Any]] = {}
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
         self.dtype = torch.float16 if self.device == "mps" else torch.float32
 
@@ -59,33 +63,40 @@ class LocalAdapterManager:
         if adapter_name not in self.adapters:
             raise ValueError(f"Unknown adapter '{adapter_name}'")
 
-        cached = self.adapter_cache.get(adapter_name)
-        if cached is not None:
-            self.model, self.tokenizer = cached
-            self.current_adapter_name = adapter_name
-            return self.model, self.tokenizer
+        with LocalAdapterManager._shared_lock:
+            if adapter_name not in LocalAdapterManager._shared_adapter_locks:
+                LocalAdapterManager._shared_adapter_locks[adapter_name] = threading.Lock()
 
-        adapter_path = self.adapters[adapter_name]
+        adapter_lock = LocalAdapterManager._shared_adapter_locks[adapter_name]
 
-        if not os.path.exists(adapter_path):
-            raise FileNotFoundError(
-                f"Adapter path not found for '{adapter_name}': {adapter_path}"
-            )
+        with adapter_lock:
+            cached = LocalAdapterManager._shared_adapter_cache.get(adapter_name)
+            if cached is not None:
+                self.model, self.tokenizer = cached
+                self.current_adapter_name = adapter_name
+                return self.model, self.tokenizer
 
-        # Reîncărcăm complet modelul dacă vrem maximă siguranță.
-        # E mai lent, dar evită surprize când schimbi adaptoarele.
-        if self.current_adapter_name != adapter_name:
+            adapter_path = self.adapters[adapter_name]
+
+            if not os.path.exists(adapter_path):
+                raise FileNotFoundError(
+                    f"Adapter path not found for '{adapter_name}': {adapter_path}"
+                )
+
             base_model, tokenizer = self._load_base_model()
 
-            self.model = PeftModel.from_pretrained(
+            model = PeftModel.from_pretrained(
                 base_model,
                 adapter_path,
                 is_trainable=False,
             )
-            self.model.eval()
+            model.eval()
+
+            LocalAdapterManager._shared_adapter_cache[adapter_name] = (model, tokenizer)
+
+            self.model = model
             self.tokenizer = tokenizer
             self.current_adapter_name = adapter_name
-            self.adapter_cache[adapter_name] = (self.model, self.tokenizer)
 
         return self.model, self.tokenizer
 

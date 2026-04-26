@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Home } from "./pages/Home";
 import { About } from "./pages/About";
 import { Interview } from "./pages/Interview";
+import { InterviewSetup } from "./pages/InterviewSetup";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppLayout } from "./components/AppLayout";
 
@@ -24,7 +25,8 @@ function App() {
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Home />} />
-            <Route path="/interview" element={<Interview />} />
+            <Route path="/interview" element={<InterviewSetup />} />
+            <Route path="/interview/session" element={<Interview />} />
             <Route path="/about" element={<About />} />
           </Route>
         </Routes>

@@ -174,7 +174,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
-        # ── 1. Citește întrebările din DB ──────────────────────────────
         queryset = Question.objects.filter(is_active=True)
 
         if options["domain"]:
@@ -185,7 +184,6 @@ class Command(BaseCommand):
             queryset = queryset[: options["limit"]]
             self.stdout.write(f"🔢 Limitat la {options['limit']} întrebări")
 
-        # .values() — nu încarcă obiecte Django întregi, mai eficient
         questions = list(queryset.values("id", "text", "category", "interview_type"))
 
         if not questions:
@@ -194,14 +192,12 @@ class Command(BaseCommand):
 
         self.stdout.write(f"📋 {len(questions)} întrebări găsite în DB\n")
 
-        # ── 2. Inițializează clientul Azure ───────────────────────────
         client = AzureOpenAI(
             api_key=AZURE_API_KEY,
             azure_endpoint=AZURE_ENDPOINT,
             api_version=AZURE_API_VERSION,
         )
 
-        # ── 3. Generează exemplele ─────────────────────────────────────
         output_path = Path(OUTPUT_FILE)
         levels = ["strong", "weak"]
         total = len(questions) * len(levels)
@@ -216,7 +212,6 @@ class Command(BaseCommand):
             for i, item in enumerate(questions):
                 question_text = item["text"]
 
-                # Folosește category dacă există, altfel interview_type
                 domain = item.get("category") or item.get("interview_type") or "general"
 
                 for level in levels:
@@ -241,7 +236,6 @@ class Command(BaseCommand):
 
                     time.sleep(DELAY_BETWEEN_CALLS)
 
-                # Flush la fiecare 10 întrebări — nu pierzi date dacă se oprește
                 if (i + 1) % 10 == 0:
                     f.flush()
                     self.stdout.write(f"\n💾 Checkpoint: {generated} exemple salvate...\n")

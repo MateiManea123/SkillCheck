@@ -240,11 +240,13 @@ def session_details(request,session_id):
             "answer_text": answer.text if answer else None
         })
 
-    ai = get_ai_service()
-    ai_feedback = ai.generate_final_session_feedback(
-        interview_type=my_session.interview_type,
-        qa_pairs=questions_data,
-    )
+    ai_feedback = None
+    if my_session.status == "FINISHED":
+        ai = get_ai_service()
+        ai_feedback = ai.generate_final_session_feedback(
+            interview_type=my_session.interview_type,
+            qa_pairs=questions_data,
+        )
 
     session_data = {
         "session_id": session_id,

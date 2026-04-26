@@ -35,7 +35,13 @@ export function SessionControls({ loading, onStart, onEnd, sessionId, disabled =
 
   return (
     <section className="rounded-3xl border border-white/80 bg-white/85 p-6 shadow-xl shadow-sky-100/60">
-      <h2 className="text-xl font-bold text-slate-900">Session Settings</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-slate-900">Session Settings</h2>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          Step 1: Configure
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-slate-600">Choose interview type and difficulty before you start.</p>
 
       <div className="mt-5 grid gap-5">
         <div className="grid gap-2">
@@ -116,7 +122,7 @@ export function SessionControls({ loading, onStart, onEnd, sessionId, disabled =
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
-          className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center rounded-xl bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition duration-300 hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={handleStart}
           disabled={loading || disabled}
         >
