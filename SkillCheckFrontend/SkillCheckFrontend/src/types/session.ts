@@ -45,6 +45,10 @@ export interface EndSessionResponse {
 export interface SessionQuestionSummary {
   question_text: string;
   answer_text: string | null;
+  ai_score?: number | null;
+  ai_feedback?: string | null;
+  ai_needs_followup?: boolean | null;
+  ai_followup_question?: string | null;
 }
 
 export interface FinalAiFeedback {
@@ -60,5 +64,16 @@ export interface SessionDetailsResponse {
   created_at: string;
   ended_at: string | null;
   questions: SessionQuestionSummary[];
-  ai_feedback: FinalAiFeedback;
+  ai_feedback: FinalAiFeedback | null;
+}
+
+export interface SessionHistoryItem {
+  id: number;
+  status: SessionStatus;
+  interview_type: InterviewType;
+  role: RoleType | null;
+  level: LevelType | null;
+  created_at: string;
+  ended_at: string | null;
+  final_overall_score: number | null;
 }

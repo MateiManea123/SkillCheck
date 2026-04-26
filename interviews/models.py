@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -69,10 +70,20 @@ class Session(models.Model):
     )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+        null=True,
+        blank=True,
+    )
     interview_type = models.CharField(max_length=20, choices=INTERVIEW_TYPE_CHOICES, default="TECHNICAL")
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, null=True, blank=True)
     level = models.CharField(max_length=20, choices=LEVEL_CHOICES, null=True, blank=True)
     current_index = models.PositiveIntegerField(default=0)
+    final_overall_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    final_ai_feedback = models.JSONField(null=True, blank=True)
+    final_feedback_generated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
 
@@ -149,6 +160,11 @@ class Answer(models.Model):
         related_name="answer"
     )
     text = models.TextField()
+    ai_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    ai_feedback = models.TextField(null=True, blank=True)
+    ai_needs_followup = models.BooleanField(default=False)
+    ai_followup_question = models.TextField(null=True, blank=True)
+    ai_evaluated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

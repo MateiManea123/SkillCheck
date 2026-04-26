@@ -46,6 +46,12 @@ export function clearReadyFinalFeedbackData() {
   notifyFinalFeedbackChange();
 }
 
+export function clearAllFinalFeedbackState() {
+  localStorage.removeItem(FINAL_FEEDBACK_PENDING_KEY);
+  localStorage.removeItem(FINAL_FEEDBACK_READY_KEY);
+  notifyFinalFeedbackChange();
+}
+
 export function usePendingFinalFeedbackSessionId() {
   const [pendingSessionId, setPendingSessionId] = useState<number | null>(() => getPendingFinalFeedbackSessionId());
 

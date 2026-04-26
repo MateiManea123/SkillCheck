@@ -5,7 +5,8 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.db import transaction
 from django.db.models import F
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from interviews.models import Session,Question,SessionQuestion,Answer
@@ -22,6 +23,46 @@ def get_ai_service() -> AIInterviewService:
         _AI_SERVICE = AIInterviewService()
     return _AI_SERVICE
 
+
+def _build_questions_data(my_session: Session) -> list[dict]:
+    session_questions = SessionQuestion.objects.filter(session=my_session).order_by("order")
+    questions_data = []
+    for session_question in session_questions:
+        answer = Answer.objects.filter(session_question=session_question).first()
+        questions_data.append(
+            {
+                "question_text": session_question.display_text or (session_question.question.text if session_question.question else ""),
+                "answer_text": answer.text if answer else None,
+                "ai_score": answer.ai_score if answer else None,
+                "ai_feedback": answer.ai_feedback if answer else None,
+                "ai_needs_followup": answer.ai_needs_followup if answer else None,
+                "ai_followup_question": answer.ai_followup_question if answer else None,
+            }
+        )
+    return questions_data
+
+
+def _ensure_final_feedback(my_session: Session) -> dict | None:
+    if my_session.status != "FINISHED":
+        return None
+
+    if my_session.final_ai_feedback:
+        return my_session.final_ai_feedback
+
+    ai = get_ai_service()
+    questions_data = _build_questions_data(my_session)
+    ai_feedback = ai.generate_final_session_feedback(
+        interview_type=my_session.interview_type,
+        qa_pairs=questions_data,
+    )
+
+    my_session.final_ai_feedback = ai_feedback
+    my_session.final_overall_score = ai_feedback.get("overall_score")
+    my_session.final_feedback_generated_at = timezone.now()
+    my_session.save(update_fields=["final_ai_feedback", "final_overall_score", "final_feedback_generated_at"])
+
+    return ai_feedback
+
 def homepage(request):
     return render(request, 'home.html')
     # return HttpResponse("Hello, world. You're at the polls page.")
@@ -29,11 +70,13 @@ def about(request):
      return HttpResponse("Hello, world. You're at the about page.")
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def start_session(request):
     interview_type = request.data.get("interview_type")
     role = request.data.get("role")
     level = request.data.get("level")
     new_session =Session.objects.create(
+        user=request.user,
         status="ACTIVE",
         interview_type=interview_type,
         role=role,
@@ -66,8 +109,29 @@ def start_session(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_sessions(request):
+    sessions = (
+        Session.objects.filter(user=request.user)
+        .order_by("-created_at")
+        .values(
+            "id",
+            "status",
+            "interview_type",
+            "role",
+            "level",
+            "created_at",
+            "ended_at",
+            "final_overall_score",
+        )
+    )
+    return Response(list(sessions), status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def current_question(request,session_id):
-    my_session = Session.objects.get(id=session_id)
+    my_session = Session.objects.filter(id=session_id, user=request.user).first()
     if not my_session:
         return Response("Session not found",status=status.HTTP_404_NOT_FOUND)
     if my_session.status != "ACTIVE":
@@ -113,8 +177,9 @@ def current_question(request,session_id):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def submit_answer(request,session_id):
-    my_session = Session.objects.get(id=session_id)
+    my_session = Session.objects.filter(id=session_id, user=request.user).first()
     if not my_session:
         return Response("Session not found",status=status.HTTP_404_NOT_FOUND)
     if my_session.status != "ACTIVE":
@@ -134,8 +199,8 @@ def submit_answer(request,session_id):
         return Response("Answer text is required",status=status.HTTP_400_BAD_REQUEST)
     
     answer, created = Answer.objects.update_or_create(
-    session_question=current_question,
-    defaults={"text": answer_text}
+        session_question=current_question,
+        defaults={"text": answer_text}
     )
     question_text = current_question.display_text or (current_question.question.text if current_question.question else "")
 
@@ -147,6 +212,19 @@ def submit_answer(request,session_id):
     )
     
     with transaction.atomic():
+        answer.ai_score = ai_result.get("score")
+        answer.ai_feedback = ai_result.get("feedback")
+        answer.ai_needs_followup = ai_result.get("needs_followup", False)
+        answer.ai_followup_question = ai_result.get("followup_question", "")
+        answer.ai_evaluated_at = timezone.now()
+        answer.save(update_fields=[
+            "ai_score",
+            "ai_feedback",
+            "ai_needs_followup",
+            "ai_followup_question",
+            "ai_evaluated_at",
+        ])
+
         has_followup_already = current_question.followups.exists()
         followup_text = ai_result.get("followup_question", "").strip()
 
@@ -182,6 +260,9 @@ def submit_answer(request,session_id):
 
         my_session.save(update_fields=["current_index", "status", "ended_at"])
 
+    if my_session.status == "FINISHED":
+        _ensure_final_feedback(my_session)
+
 
     
     return Response({
@@ -195,9 +276,10 @@ def submit_answer(request,session_id):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def end_session(request, session_id):
     try:
-        my_session = Session.objects.get(id=session_id)
+        my_session = Session.objects.get(id=session_id, user=request.user)
     except Session.DoesNotExist:
         return Response("Session not found", status=status.HTTP_404_NOT_FOUND)
 
@@ -215,6 +297,8 @@ def end_session(request, session_id):
     my_session.ended_at = timezone.now()
     my_session.save(update_fields=["status", "ended_at"])
 
+    _ensure_final_feedback(my_session)
+
     return Response(
         {
             "message": "Session ended",
@@ -226,27 +310,14 @@ def end_session(request, session_id):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def session_details(request,session_id):
-    my_session = Session.objects.get(id=session_id)
+    my_session = Session.objects.filter(id=session_id, user=request.user).first()
     if not my_session:
         return Response("Session not found",status=status.HTTP_404_NOT_FOUND)
-    session_questions = SessionQuestion.objects.filter(session=my_session).order_by("order")
-    questions_data = []
 
-    for session_question in session_questions:
-        answer = Answer.objects.filter(session_question=session_question).first()
-        questions_data.append({
-            "question_text": session_question.display_text,
-            "answer_text": answer.text if answer else None
-        })
-
-    ai_feedback = None
-    if my_session.status == "FINISHED":
-        ai = get_ai_service()
-        ai_feedback = ai.generate_final_session_feedback(
-            interview_type=my_session.interview_type,
-            qa_pairs=questions_data,
-        )
+    questions_data = _build_questions_data(my_session)
+    ai_feedback = _ensure_final_feedback(my_session)
 
     session_data = {
         "session_id": session_id,

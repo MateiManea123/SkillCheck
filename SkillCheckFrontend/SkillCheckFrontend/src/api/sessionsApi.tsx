@@ -1,23 +1,14 @@
-import axios from "axios";
 import type {
   CurrentQuestionResponse,
   EndSessionResponse,
+  SessionHistoryItem,
   SessionDetailsResponse,
   StartSessionPayload,
   StartSessionResponse,
   SubmitAnswerPayload,
   SubmitAnswerResponse,
 } from "../types/session";
-
-const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
-
-const apiClient = axios.create({
-  baseURL: API,
-  timeout: 120000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+import { apiClient } from "./http";
 
 export async function startSession(payload: StartSessionPayload): Promise<StartSessionResponse> {
   const res = await apiClient.post<StartSessionResponse>("/sessions/", payload);
@@ -43,6 +34,13 @@ export async function submitAnswer({ sessionId, answer }: SubmitAnswerPayload): 
 export async function getSessionData(sessionId: number): Promise<SessionDetailsResponse> {
   const res = await apiClient.get<SessionDetailsResponse>(`/sessions/${sessionId}/`, {
     timeout: 300000,
+  });
+  return res.data;
+}
+
+export async function getSessionHistory(): Promise<SessionHistoryItem[]> {
+  const res = await apiClient.get<SessionHistoryItem[]>("/sessions/history/", {
+    timeout: 120000,
   });
   return res.data;
 }

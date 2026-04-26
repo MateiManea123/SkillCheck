@@ -1,53 +1,104 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../hooks/AuthProvider";
+import { useTheme } from "../hooks/useTheme";
+
+const benefits = [
+  {
+    title: "Real interview flow",
+    text: "Practice in a live question-and-answer format, not in a static questionnaire.",
+  },
+  {
+    title: "Technical and HR sessions",
+    text: "Switch between role-based technical interviews and behavioral practice.",
+  },
+  {
+    title: "Clear final feedback",
+    text: "Finish each session with a score, strengths, and concrete improvement points.",
+  },
+];
 
 export function Home() {
+  const { isDark } = useTheme();
+  const { isAuthenticated } = useAuth();
+
   return (
-    <section className="space-y-10">
-      <div className="animate-fade-up rounded-3xl border border-white/70 bg-white/75 p-7 shadow-xl shadow-sky-100/60 backdrop-blur-xl sm:p-12">
-        <div className="max-w-3xl space-y-6">
-          <span className="inline-flex rounded-full border border-sky-200 bg-sky-100/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
-            Frontend Interview Platform
-          </span>
+    <section className="space-y-6">
+      <div
+        className={`overflow-hidden rounded-3xl border ${
+          isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-xl shadow-slate-900/5"
+        }`}
+      >
+        <div className="grid gap-8 px-6 py-8 sm:px-8 lg:grid-cols-[minmax(0,1.15fr)_380px] lg:px-10 lg:py-10">
+          <div className="max-w-3xl">
+            <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
+              AI interview practice
+            </p>
+            <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] sm:text-5xl">
+              Prepare for interviews with realistic sessions and useful feedback.
+            </h1>
+            <p className={`mt-4 max-w-2xl text-base leading-8 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+              SkillCheck helps candidates practice technical and HR interviews in a focused chat experience, then learn
+              from structured feedback at the end.
+            </p>
 
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Practice smarter with live AI interview sessions
-          </h1>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                to={isAuthenticated ? "/interview" : "/register"}
+                className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
+                  isDark ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300" : "bg-slate-900 text-white hover:bg-slate-800"
+                }`}
+              >
+                {isAuthenticated ? "Start practice" : "Create account"}
+              </Link>
+              <Link
+                to="/about"
+                className={`rounded-xl border px-5 py-3 text-sm font-semibold transition ${
+                  isDark
+                    ? "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Learn more
+              </Link>
+            </div>
+          </div>
 
-          <p className="text-base leading-relaxed text-slate-600 sm:text-lg">
-            Configure your session first, then jump into a dedicated live chat interview room with AI follow-ups and
-            structured final feedback.
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to="/interview"
-              className="rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 px-6 py-3 text-sm font-bold text-white shadow-md shadow-sky-200 transition duration-300 hover:-translate-y-0.5 hover:from-sky-600 hover:to-indigo-600 hover:shadow-lg"
-            >
-              Configure Interview
-            </Link>
-            <Link
-              to="/about"
-              className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:text-sky-700"
-            >
-              Learn More
-            </Link>
+          <div
+            className={`rounded-2xl border p-5 ${
+              isDark ? "border-white/10 bg-slate-950/70" : "border-slate-200 bg-slate-50"
+            }`}
+          >
+            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              What you get
+            </p>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-inherit pb-3">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Interview types</span>
+                <span className="font-semibold">Technical, HR</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-inherit pb-3">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Modes</span>
+                <span className="font-semibold">Live chat, voice input</span>
+              </div>
+              <div className="flex items-center justify-between pb-1">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Outcome</span>
+                <span className="font-semibold">Score + feedback</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
-          {[
-          { title: "Setup", text: "Choose interview type and seniority before entering the room." },
-          { title: "Chat Interview", text: "Answer in a focused conversation flow, question by question." },
-          { title: "Final Review", text: "Get score, strengths, and concrete improvement directions." },
-        ].map((item, index) => (
+      <div className="grid gap-4 md:grid-cols-3">
+        {benefits.map((item) => (
           <article
             key={item.title}
-            className="animate-float rounded-2xl border border-white/80 bg-white/80 p-6 shadow-lg shadow-sky-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-            style={{ animationDelay: `${index * 180}ms` }}
+            className={`rounded-2xl border p-6 ${
+              isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-sm shadow-slate-900/5"
+            }`}
           >
-            <h2 className="text-lg font-semibold text-slate-900">{item.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+            <h2 className="text-xl font-black tracking-[-0.04em]">{item.title}</h2>
+            <p className={`mt-3 text-sm leading-7 ${isDark ? "text-slate-400" : "text-slate-600"}`}>{item.text}</p>
           </article>
         ))}
       </div>

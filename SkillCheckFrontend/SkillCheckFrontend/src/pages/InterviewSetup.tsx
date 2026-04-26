@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessionFlow } from "../hooks/useSessionFlow";
+import { useTheme } from "../hooks/useTheme";
 import type { InterviewType, LevelType, RoleType, StartSessionPayload } from "../types/session";
 import { usePendingFinalFeedbackSessionId } from "../utils/finalFeedbackTask";
 
@@ -11,8 +12,14 @@ type FeedbackMode = "PER_QUESTION" | "FINAL_ONLY";
 const FEEDBACK_MODE_KEY = "skillcheck.feedback.mode.v1";
 const CHAT_HISTORY_KEY = "skillcheck.chat.history.v1";
 
+const interviewDescriptions: Record<InterviewType, string> = {
+  TECHNICAL: "Role-based technical questions.",
+  HR: "Behavioral and communication practice.",
+};
+
 export function InterviewSetup() {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
   const [interviewType, setInterviewType] = useState<InterviewType>("TECHNICAL");
   const [role, setRole] = useState<RoleType>("FRONTEND");
   const [level, setLevel] = useState<LevelType>("JUNIOR");
@@ -43,133 +50,184 @@ export function InterviewSetup() {
     actions.startSession(payload);
   };
 
+  const optionClass = (selected: boolean) =>
+    `rounded-xl border px-4 py-3 text-left text-sm transition ${
+      selected
+        ? isDark
+          ? "border-emerald-300/30 bg-emerald-400/10 text-white"
+          : "border-slate-900 bg-slate-900 text-white"
+        : isDark
+          ? "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+    }`;
+
+  const panelClass = isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-white shadow-sm shadow-slate-900/5";
+
   return (
     <section className="space-y-6">
-      <div className="overflow-hidden rounded-3xl border border-white/70 bg-white/85 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
-        <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 px-6 py-8 text-white sm:px-8">
-          <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-100">
-            Interview setup
-          </span>
-          <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Configure your interview session</h1>
-          <p className="mt-3 max-w-2xl text-sm text-slate-200 sm:text-base">
-            Start here, then move to a dedicated chat workspace where you answer in a real interviewer flow.
-          </p>
-        </div>
+      <div className={`rounded-3xl border p-6 sm:p-8 ${panelClass}`}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className={`text-xs font-bold uppercase tracking-[0.24em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
+              Session setup
+            </p>
+            <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] sm:text-5xl">Choose your interview settings.</h1>
+            <p className={`mt-4 text-base leading-8 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+              Set the interview type, level, and feedback style, then continue to the live session.
+            </p>
+          </div>
 
-        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-4">
-          <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview type</p>
-            <div className="mt-3 grid gap-2">
-              {INTERVIEW_TYPES.map((item) => {
-                const selected = interviewType === item;
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => setInterviewType(item)}
-                    className={`rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                      selected
-                        ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
+          <div className={`rounded-2xl border p-4 ${isDark ? "border-white/10 bg-slate-950/70" : "border-slate-200 bg-slate-50"}`}>
+            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Summary
+            </p>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Interview</span>
+                <span className="font-semibold">{interviewType}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Role</span>
+                <span className="font-semibold">{interviewType === "HR" ? "Not required" : role}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Level</span>
+                <span className="font-semibold">{interviewType === "HR" ? "Not required" : level}</span>
+              </div>
             </div>
-          </article>
+          </div>
+        </div>
+      </div>
 
-          <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Role</p>
-            <select
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none ring-indigo-400/70 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-              value={role}
-              onChange={(e) => setRole(e.target.value as RoleType)}
-              disabled={loading || interviewType === "HR"}
-            >
-              {ROLES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <div className={`rounded-2xl border p-5 ${panelClass}`}>
+            <h2 className="text-xl font-black tracking-[-0.04em]">Interview type</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {INTERVIEW_TYPES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setInterviewType(item)}
+                  className={optionClass(interviewType === item)}
+                >
+                  <p className="font-semibold">{item}</p>
+                  <p className={`mt-1 text-xs leading-6 ${interviewType === item ? "text-inherit/80" : isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    {interviewDescriptions[item]}
+                  </p>
+                </button>
               ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">Only used for technical interviews.</p>
-          </article>
+            </div>
+          </div>
 
-          <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Seniority</p>
-            <select
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none ring-indigo-400/70 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-              value={level}
-              onChange={(e) => setLevel(e.target.value as LevelType)}
-              disabled={loading || interviewType === "HR"}
-            >
-              {LEVELS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">Used to adapt question depth and evaluator strictness.</p>
-          </article>
+          <div className={`rounded-2xl border p-5 ${panelClass}`}>
+            <h2 className="text-xl font-black tracking-[-0.04em]">Technical configuration</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Role</span>
+                <select
+                  className={`rounded-xl border px-3 py-3 outline-none ${
+                    isDark ? "border-white/10 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as RoleType)}
+                  disabled={loading || interviewType === "HR"}
+                >
+                  {ROLES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <article className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Feedback style</p>
-            <div className="mt-3 grid gap-2">
+              <label className="grid gap-2 text-sm">
+                <span className={isDark ? "text-slate-400" : "text-slate-500"}>Seniority</span>
+                <select
+                  className={`rounded-xl border px-3 py-3 outline-none ${
+                    isDark ? "border-white/10 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value as LevelType)}
+                  disabled={loading || interviewType === "HR"}
+                >
+                  {LEVELS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border p-5 ${panelClass}`}>
+            <h2 className="text-xl font-black tracking-[-0.04em]">Feedback style</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <button
                 type="button"
                 disabled={loading}
                 onClick={() => setFeedbackMode("PER_QUESTION")}
-                className={`rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                  feedbackMode === "PER_QUESTION"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
+                className={optionClass(feedbackMode === "PER_QUESTION")}
               >
-                Show after each question
+                <p className="font-semibold">Show during session</p>
+                <p className={`mt-1 text-xs leading-6 ${feedbackMode === "PER_QUESTION" ? "text-inherit/80" : isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  See feedback after each answer.
+                </p>
               </button>
               <button
                 type="button"
                 disabled={loading}
                 onClick={() => setFeedbackMode("FINAL_ONLY")}
-                className={`rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                  feedbackMode === "FINAL_ONLY"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
+                className={optionClass(feedbackMode === "FINAL_ONLY")}
               >
-                Hide during chat (still generated)
+                <p className="font-semibold">Show only at the end</p>
+                <p className={`mt-1 text-xs leading-6 ${feedbackMode === "FINAL_ONLY" ? "text-inherit/80" : isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Keep the session focused and review everything later.
+                </p>
               </button>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Both modes keep per-question evaluation on the backend; this only changes chat visibility.</p>
-          </article>
+          </div>
         </div>
 
-        <div className="border-t border-slate-100 px-6 py-5 sm:px-8">
+        <aside className={`rounded-2xl border p-5 h-fit ${isDark ? "border-white/10 bg-slate-950/70" : "border-slate-200 bg-slate-50"}`}>
+          <h2 className="text-xl font-black tracking-[-0.04em]">Ready to start?</h2>
+          <p className={`mt-3 text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+            Your answers will be evaluated using the selected interview settings.
+          </p>
+
           <button
             type="button"
             onClick={handleStart}
             disabled={loading || !!pendingFinalFeedbackSessionId}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className={`mt-6 inline-flex w-full items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              isDark ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300" : "bg-slate-900 text-white hover:bg-slate-800"
+            }`}
           >
-            {pendingFinalFeedbackSessionId ? "Final feedback in progress..." : loading ? "Starting session..." : "Continue to interview chat"}
+            {pendingFinalFeedbackSessionId
+              ? "Final feedback in progress..."
+              : loading
+                ? "Starting session..."
+                : "Continue to interview"}
           </button>
+
           {pendingFinalFeedbackSessionId && (
-            <p className="mt-2 text-xs text-amber-700">
-              Final feedback is generating for session #{pendingFinalFeedbackSessionId}. Starting a new interview is temporarily locked.
+            <p className={`mt-4 text-xs font-semibold ${isDark ? "text-amber-300" : "text-amber-700"}`}>
+              Final feedback is still being generated for the previous session.
             </p>
           )}
           {sessionId && !sessionFinished && (
-            <p className="mt-2 text-xs text-slate-600">Existing active session detected. Redirecting to chat...</p>
+            <p className={`mt-4 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              Existing active session detected. Redirecting now.
+            </p>
           )}
           {errors.start && (
-            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               Could not start the session.
             </p>
           )}
-        </div>
+        </aside>
       </div>
     </section>
   );

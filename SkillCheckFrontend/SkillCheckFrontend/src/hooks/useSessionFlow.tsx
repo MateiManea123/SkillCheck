@@ -16,6 +16,10 @@ import type {
 
 const STORAGE_KEY = "skillcheck.session.flow.v1";
 
+export function clearPersistedSessionFlow() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 function isRetryableAxiosError(error: AxiosError | null | undefined): boolean {
   if (!error) return false;
 

@@ -5,6 +5,7 @@ urlpatterns=[
     path("",views.homepage,name="home"),
     path("about/",views.about),
     path("api/sessions/",views.start_session),
+    path("api/sessions/history/",views.list_sessions),
     path("api/sessions/<int:session_id>/",views.session_details),
     path("api/sessions/<int:session_id>/current-question/",views.current_question),
     path("api/sessions/<int:session_id>/answer/",views.submit_answer),
