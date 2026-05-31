@@ -1,13 +1,38 @@
 export type InterviewType = "HR" | "TECHNICAL";
-export type RoleType = "FRONTEND" | "BACKEND";
+export type RoleType = "FRONTEND" | "BACKEND" | "FULLSTACK";
 export type LevelType = "JUNIOR" | "MID" | "SENIOR";
 export type SessionStatus = "ACTIVE" | "FINISHED";
 export type QuestionKind = "BASE" | "FOLLOW_UP";
+export type TechnologyType =
+  | "HTML"
+  | "CSS"
+  | "JAVASCRIPT"
+  | "TYPESCRIPT"
+  | "REACT"
+  | "PYTHON"
+  | "DJANGO"
+  | "REST_API"
+  | "SQL"
+  | "AUTHENTICATION"
+  | "SECURITY"
+  | "TESTING"
+  | "PERFORMANCE"
+  | "ACCESSIBILITY";
+export type QuestionType =
+  | "CONCEPTUAL"
+  | "PRACTICAL"
+  | "DEBUGGING"
+  | "ARCHITECTURE"
+  | "PERFORMANCE"
+  | "SECURITY"
+  | "TRADE_OFF";
 
 export interface StartSessionPayload {
   interview_type: InterviewType;
   role?: RoleType;
   level?: LevelType;
+  selected_technologies?: TechnologyType[];
+  question_types?: QuestionType[];
 }
 
 export interface StartSessionResponse {

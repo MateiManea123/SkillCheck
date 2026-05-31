@@ -1,5 +1,4 @@
-import json
-
+import os
 from django.utils import timezone
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -11,17 +10,140 @@ from rest_framework.response import Response
 from rest_framework import status
 from interviews.models import Session,Question,SessionQuestion,Answer
 import random
-from .services.ai_interviewer import AIInterviewService
+from .services.ai_interviewer import AIInterviewService, TechnicalAIInterviewService
+
+INTERVIEW_TYPES = {"HR", "TECHNICAL"}
+ALLOWED_LEVELS = {choice for choice, _ in Session.LEVEL_CHOICES}
+ALLOWED_ROLES = {choice for choice, _ in Session.ROLE_CHOICES}
+ALLOWED_QUESTION_TYPES = {choice for choice, _ in Question.QUESTION_TYPE_CHOICES}
+
+TRACK_TECHNOLOGIES = {
+    "FRONTEND": {
+        "HTML",
+        "CSS",
+        "JAVASCRIPT",
+        "TYPESCRIPT",
+        "REACT",
+        "PERFORMANCE",
+        "ACCESSIBILITY",
+    },
+    "BACKEND": {
+        "PYTHON",
+        "DJANGO",
+        "REST_API",
+        "SQL",
+        "AUTHENTICATION",
+        "SECURITY",
+        "TESTING",
+    },
+}
+TRACK_TECHNOLOGIES["FULLSTACK"] = TRACK_TECHNOLOGIES["FRONTEND"] | TRACK_TECHNOLOGIES["BACKEND"]
 
 
-_AI_SERVICE: AIInterviewService | None = None
+_AI_SERVICES: dict[str, AIInterviewService | TechnicalAIInterviewService] = {}
 
 
-def get_ai_service() -> AIInterviewService:
-    global _AI_SERVICE
-    if _AI_SERVICE is None:
-        _AI_SERVICE = AIInterviewService()
-    return _AI_SERVICE
+def get_ai_service(interview_type: str) -> AIInterviewService | TechnicalAIInterviewService:
+    service_key = "HR" if interview_type == "HR" else "TECHNICAL"
+    if service_key not in _AI_SERVICES:
+        if service_key == "HR":
+            previous_provider = os.environ.get("LLM_PROVIDER")
+            os.environ["LLM_PROVIDER"] = "local"
+            try:
+                _AI_SERVICES[service_key] = AIInterviewService()
+            finally:
+                if previous_provider is None:
+                    os.environ.pop("LLM_PROVIDER", None)
+                else:
+                    os.environ["LLM_PROVIDER"] = previous_provider
+        else:
+            _AI_SERVICES[service_key] = TechnicalAIInterviewService()
+    return _AI_SERVICES[service_key]
+
+
+def _normalize_choice_list(raw_value) -> list[str]:
+    if raw_value is None:
+        return []
+
+    if isinstance(raw_value, str):
+        cleaned = raw_value.strip()
+        return [cleaned] if cleaned else []
+
+    if isinstance(raw_value, (list, tuple)):
+        cleaned_values = []
+        for item in raw_value:
+            if not isinstance(item, str):
+                continue
+            cleaned_item = item.strip()
+            if cleaned_item:
+                cleaned_values.append(cleaned_item)
+        return cleaned_values
+
+    return []
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _select_uniform_questions(questions: list[Question], target_count: int) -> list[Question]:
+    if target_count <= 0 or not questions:
+        return []
+
+    buckets: dict[tuple[str, str], list[Question]] = {}
+    for question in questions:
+        key = (
+            question.technology or "GENERAL",
+            question.question_type or "CONCEPTUAL",
+        )
+        buckets.setdefault(key, []).append(question)
+
+    for bucket in buckets.values():
+        random.shuffle(bucket)
+
+    bucket_keys = list(buckets.keys())
+    random.shuffle(bucket_keys)
+
+    selected: list[Question] = []
+    while bucket_keys and len(selected) < target_count:
+        next_round_keys: list[tuple[str, str]] = []
+        for key in bucket_keys:
+            bucket = buckets[key]
+            if bucket and len(selected) < target_count:
+                selected.append(bucket.pop())
+            if bucket:
+                next_round_keys.append(key)
+        random.shuffle(next_round_keys)
+        bucket_keys = next_round_keys
+
+    return selected
+
+
+def _build_question_metadata(my_session: Session, session_question: SessionQuestion) -> dict:
+    question = session_question.question
+    base_metadata = {
+        "session_interview_type": my_session.interview_type,
+        "session_role": my_session.role,
+        "session_level": my_session.level,
+        "session_selected_technologies": my_session.selected_technologies,
+        "session_question_kind": session_question.question_kind,
+    }
+
+    if not question:
+        return base_metadata
+
+    base_metadata.update(
+        {
+            "question_track": question.track,
+            "question_technology": question.technology,
+            "question_type": question.question_type,
+            "question_difficulty": question.difficulty,
+            "expected_concepts": question.expected_concepts,
+            "common_mistakes": question.common_mistakes,
+            "bonus_points": question.bonus_points,
+        }
+    )
+    return base_metadata
 
 
 def _build_questions_data(my_session: Session) -> list[dict]:
@@ -37,6 +159,7 @@ def _build_questions_data(my_session: Session) -> list[dict]:
                 "ai_feedback": answer.ai_feedback if answer else None,
                 "ai_needs_followup": answer.ai_needs_followup if answer else None,
                 "ai_followup_question": answer.ai_followup_question if answer else None,
+                "question_metadata": _build_question_metadata(my_session, session_question),
             }
         )
     return questions_data
@@ -49,12 +172,23 @@ def _ensure_final_feedback(my_session: Session) -> dict | None:
     if my_session.final_ai_feedback:
         return my_session.final_ai_feedback
 
-    ai = get_ai_service()
+    ai = get_ai_service(my_session.interview_type)
     questions_data = _build_questions_data(my_session)
-    ai_feedback = ai.generate_final_session_feedback(
-        interview_type=my_session.interview_type,
-        qa_pairs=questions_data,
-    )
+    if my_session.interview_type == "TECHNICAL":
+        ai_feedback = ai.generate_final_session_feedback(
+            interview_type=my_session.interview_type,
+            qa_pairs=questions_data,
+            session_metadata={
+                "role": my_session.role,
+                "level": my_session.level,
+                "selected_technologies": my_session.selected_technologies,
+            },
+        )
+    else:
+        ai_feedback = ai.generate_final_session_feedback(
+            interview_type=my_session.interview_type,
+            qa_pairs=questions_data,
+        )
 
     my_session.final_ai_feedback = ai_feedback
     my_session.final_overall_score = ai_feedback.get("overall_score")
@@ -75,29 +209,87 @@ def start_session(request):
     interview_type = request.data.get("interview_type")
     role = request.data.get("role")
     level = request.data.get("level")
-    new_session =Session.objects.create(
-        user=request.user,
-        status="ACTIVE",
-        interview_type=interview_type,
-        role=role,
-        level=level,
-        current_index=0
-        )
+    selected_technologies = _dedupe_preserve_order(
+        _normalize_choice_list(request.data.get("selected_technologies"))
+    )
+    question_types = _dedupe_preserve_order(
+        _normalize_choice_list(request.data.get("question_types"))
+    )
+
+    if interview_type not in INTERVIEW_TYPES:
+        return Response("Invalid interview type", status=status.HTTP_400_BAD_REQUEST)
 
     if interview_type == "HR":
-        questions = Question.objects.filter(
-            is_active=True,
-            interview_type="HR"
+        questions = list(
+            Question.objects.filter(
+                is_active=True,
+                interview_type="HR",
+            )
         )
+        random_questions = random.sample(questions, min(len(questions), 5))
+        session_kwargs = {
+            "user": request.user,
+            "status": "ACTIVE",
+            "interview_type": interview_type,
+            "current_index": 0,
+        }
     else:
-        questions = Question.objects.filter(
-            is_active=True,
-            interview_type="TECHNICAL",
-            difficulty=level
+        if role not in ALLOWED_ROLES:
+            return Response("Invalid or missing technical track", status=status.HTTP_400_BAD_REQUEST)
+
+        if level not in ALLOWED_LEVELS:
+            return Response("Invalid or missing technical level", status=status.HTTP_400_BAD_REQUEST)
+
+        if not selected_technologies:
+            return Response("At least one selected technology is required", status=status.HTTP_400_BAD_REQUEST)
+
+        if not question_types:
+            return Response("At least one question type is required", status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_track_technologies = TRACK_TECHNOLOGIES.get(role, set())
+        invalid_technologies = sorted(set(selected_technologies) - allowed_track_technologies)
+        if invalid_technologies:
+            return Response(
+                {"error": "Invalid technologies for selected track", "technologies": invalid_technologies},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invalid_question_types = sorted(set(question_types) - ALLOWED_QUESTION_TYPES)
+        if invalid_question_types:
+            return Response(
+                {"error": "Invalid question types", "question_types": invalid_question_types},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        technical_questions = list(
+            Question.objects.filter(
+                is_active=True,
+                interview_type="TECHNICAL",
+                track=role,
+                technology__in=selected_technologies,
+                difficulty=level,
+                question_type__in=question_types,
+            )
         )
-    random_questions = random.sample(list(questions), min(len(questions), 5))
+        random_questions = _select_uniform_questions(
+            questions=technical_questions,
+            target_count=min(len(technical_questions), 10),
+        )
+        session_kwargs = {
+            "user": request.user,
+            "status": "ACTIVE",
+            "interview_type": interview_type,
+            "role": role,
+            "level": level,
+            "selected_technologies": selected_technologies,
+            "current_index": 0,
+        }
+
     if not random_questions:
         return Response("No active questions available to start a session",status=status.HTTP_400_BAD_REQUEST)
+
+    new_session = Session.objects.create(**session_kwargs)
+
     for index, question in enumerate(random_questions):
         SessionQuestion.objects.create(
             question=question,
@@ -149,18 +341,28 @@ def current_question(request,session_id):
     
     if current_index >= session_questions.count():
         return Response("No more questions in this session",status=status.HTTP_400_BAD_REQUEST)
-    print(current_index)
-    
     try:
         session_question = my_session.session_questions.get(order=my_session.current_index)
     except SessionQuestion.DoesNotExist:
         return Response({"error": "No current question"}, status=status.HTTP_404_NOT_FOUND)
 
     if not session_question.display_text:
-        ai = get_ai_service()
+        ai = get_ai_service(my_session.interview_type)
         if session_question.question:
             original_text = session_question.question.text
-            rewritten = ai.rewrite_question(my_session.interview_type, original_text,previous_answer)
+            if my_session.interview_type == "TECHNICAL":
+                rewritten = ai.rewrite_question(
+                    interview_type=my_session.interview_type,
+                    question_text=original_text,
+                    previous_answer=previous_answer,
+                    question_metadata=_build_question_metadata(my_session, session_question),
+                )
+            else:
+                rewritten = ai.rewrite_question(
+                    interview_type=my_session.interview_type,
+                    question_text=original_text,
+                    previous_answer=previous_answer,
+                )
             session_question.display_text = rewritten
             session_question.save(update_fields=["display_text"])
         else:
@@ -198,18 +400,28 @@ def submit_answer(request,session_id):
     if not answer_text:
         return Response("Answer text is required",status=status.HTTP_400_BAD_REQUEST)
     
-    answer, created = Answer.objects.update_or_create(
+    answer, _ = Answer.objects.update_or_create(
         session_question=current_question,
         defaults={"text": answer_text}
     )
     question_text = current_question.display_text or (current_question.question.text if current_question.question else "")
 
-    ai = get_ai_service()
-    ai_result = ai.evaluate_answer_and_followup(
-        interview_type=my_session.interview_type,
-        question_text=question_text,
-        answer_text=answer.text,
-    )
+    ai = get_ai_service(my_session.interview_type)
+    if my_session.interview_type == "TECHNICAL":
+        ai_result = ai.evaluate_answer_and_followup(
+            interview_type=my_session.interview_type,
+            question_text=question_text,
+            answer_text=answer.text,
+            history=_build_questions_data(my_session)[:current_index],
+            question_metadata=_build_question_metadata(my_session, current_question),
+        )
+    else:
+        ai_result = ai.evaluate_answer_and_followup(
+            interview_type=my_session.interview_type,
+            question_text=question_text,
+            answer_text=answer.text,
+            history=_build_questions_data(my_session)[:current_index],
+        )
     
     with transaction.atomic():
         answer.ai_score = ai_result.get("score")

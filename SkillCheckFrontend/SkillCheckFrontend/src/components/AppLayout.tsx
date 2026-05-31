@@ -418,11 +418,15 @@ export function AppLayout() {
       {selectedHistorySessionId && (
         <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 ${isDark ? "bg-slate-950/80" : "bg-slate-950/40"}`}>
           <div
-            className={`w-full max-w-5xl rounded-3xl border p-6 shadow-2xl sm:p-8 ${
+            className={`flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl ${
               isDark ? "border-white/10 bg-slate-950" : "border-slate-200 bg-white"
             }`}
           >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div
+              className={`flex flex-col gap-4 border-b p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8 ${
+                isDark ? "border-white/10 bg-slate-950" : "border-slate-200 bg-white"
+              }`}
+            >
               <div>
                 <p className={`text-xs font-bold uppercase tracking-[0.22em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
                   Session history
@@ -442,98 +446,100 @@ export function AppLayout() {
               </button>
             </div>
 
-            {selectedSessionQuery.isLoading && (
-              <p className={`mt-6 text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Loading transcript...</p>
-            )}
+            <div className="overflow-y-auto p-6 sm:p-8">
+              {selectedSessionQuery.isLoading && (
+                <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Loading transcript...</p>
+              )}
 
-            {selectedHistorySession && (
-              <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
-                  <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                    Transcript
-                  </p>
-                  <div className="mt-4 max-h-[60vh] space-y-4 overflow-y-auto">
-                    {selectedHistorySession.questions.map((item, index) => (
-                      <div key={`${selectedHistorySession.session_id}-${index}`} className="space-y-2 rounded-xl border border-inherit p-4">
-                        <div>
-                          <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                            Interviewer
-                          </p>
-                          <p className="mt-1 text-sm leading-7">{item.question_text}</p>
-                        </div>
-                        {item.answer_text && (
-                          <div>
-                            <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
-                              Candidate
-                            </p>
-                            <p className={`mt-1 text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                              {item.answer_text}
-                            </p>
-                          </div>
-                        )}
-                        {item.ai_feedback && (
-                          <div className={`rounded-lg px-3 py-2 text-sm ${isDark ? "bg-slate-950/80 text-slate-300" : "bg-white text-slate-600"}`}>
-                            <span className="font-semibold">Feedback:</span> {item.ai_feedback}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
+              {selectedHistorySession && (
+                <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
                   <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
-                    <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
-                      Final summary
+                    <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      Transcript
                     </p>
-                    {selectedHistorySession.ai_feedback ? (
+                    <div className="mt-4 space-y-4">
+                      {selectedHistorySession.questions.map((item, index) => (
+                        <div key={`${selectedHistorySession.session_id}-${index}`} className="space-y-2 rounded-xl border border-inherit p-4">
+                          <div>
+                            <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                              Interviewer
+                            </p>
+                            <p className="mt-1 text-sm leading-7">{item.question_text}</p>
+                          </div>
+                          {item.answer_text && (
+                            <div>
+                              <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
+                                Candidate
+                              </p>
+                              <p className={`mt-1 text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                                {item.answer_text}
+                              </p>
+                            </div>
+                          )}
+                          {item.ai_feedback && (
+                            <div className={`rounded-lg px-3 py-2 text-sm ${isDark ? "bg-slate-950/80 text-slate-300" : "bg-white text-slate-600"}`}>
+                              <span className="font-semibold">Feedback:</span> {item.ai_feedback}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
+                      <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
+                        Final summary
+                      </p>
+                      {selectedHistorySession.ai_feedback ? (
+                        <>
+                          <p className="mt-3 text-5xl font-black tracking-[-0.06em]">
+                            {selectedHistorySession.ai_feedback.overall_score}
+                          </p>
+                          <p className={`mt-4 text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                            {selectedHistorySession.ai_feedback.summary}
+                          </p>
+                        </>
+                      ) : (
+                        <p className={`mt-3 text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Final summary is not available yet.</p>
+                      )}
+                    </div>
+
+                    {selectedHistorySession.ai_feedback && (
                       <>
-                        <p className="mt-3 text-5xl font-black tracking-[-0.06em]">
-                          {selectedHistorySession.ai_feedback.overall_score}
-                        </p>
-                        <p className={`mt-4 text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-                          {selectedHistorySession.ai_feedback.summary}
-                        </p>
+                        <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
+                          <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                            Strengths
+                          </p>
+                          <ul className={`mt-4 space-y-3 text-sm leading-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                            {selectedHistorySession.ai_feedback.strengths.map((item) => (
+                              <li key={item} className="flex gap-3">
+                                <span className={`mt-2 h-1.5 w-1.5 rounded-full ${isDark ? "bg-emerald-300" : "bg-emerald-500"}`} />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
+                          <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                            Improve next
+                          </p>
+                          <ul className={`mt-4 space-y-3 text-sm leading-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                            {selectedHistorySession.ai_feedback.improvements.map((item) => (
+                              <li key={item} className="flex gap-3">
+                                <span className={`mt-2 h-1.5 w-1.5 rounded-full ${isDark ? "bg-slate-300" : "bg-slate-500"}`} />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </>
-                    ) : (
-                      <p className={`mt-3 text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Final summary is not available yet.</p>
                     )}
                   </div>
-
-                  {selectedHistorySession.ai_feedback && (
-                    <>
-                      <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
-                        <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                          Strengths
-                        </p>
-                        <ul className={`mt-4 space-y-3 text-sm leading-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-                          {selectedHistorySession.ai_feedback.strengths.map((item) => (
-                            <li key={item} className="flex gap-3">
-                              <span className={`mt-2 h-1.5 w-1.5 rounded-full ${isDark ? "bg-emerald-300" : "bg-emerald-500"}`} />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className={`rounded-2xl border p-5 ${isDark ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
-                        <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                          Improve next
-                        </p>
-                        <ul className={`mt-4 space-y-3 text-sm leading-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-                          {selectedHistorySession.ai_feedback.improvements.map((item) => (
-                            <li key={item} className="flex gap-3">
-                              <span className={`mt-2 h-1.5 w-1.5 rounded-full ${isDark ? "bg-slate-300" : "bg-slate-500"}`} />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </>
-                  )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

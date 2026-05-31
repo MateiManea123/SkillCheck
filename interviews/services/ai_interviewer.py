@@ -348,3 +348,273 @@ Interview transcript:
                 "strengths": [],
                 "improvements": [],
             }
+
+
+class TechnicalAIInterviewService:
+    def __init__(self):
+        from openai import AzureOpenAI
+
+        azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+        self.azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+
+        if not azure_api_key or not azure_endpoint:
+            raise ValueError(
+                "Missing Azure OpenAI credentials. "
+                "Set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT."
+            )
+
+        self.azure_client = AzureOpenAI(
+            api_key=azure_api_key,
+            azure_endpoint=azure_endpoint,
+            api_version=azure_api_version,
+        )
+
+    def _build_messages(self, system_prompt: str, user_prompt: str) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": system_prompt.strip()},
+            {"role": "user", "content": user_prompt.strip()},
+        ]
+
+    def _generate_azure(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int = 400,
+        response_format: dict[str, str] | None = None,
+    ) -> str:
+        request_kwargs: dict[str, Any] = {
+            "model": self.azure_deployment,
+            "messages": self._build_messages(system_prompt, user_prompt),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format is not None:
+            request_kwargs["response_format"] = response_format
+
+        response = self.azure_client.chat.completions.create(**request_kwargs)
+        content = response.choices[0].message.content or ""
+        return content.strip()
+
+    def _generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_new_tokens: int,
+        fallback: dict,
+    ) -> dict:
+        raw = self._generate_azure(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.2,
+            max_tokens=max_new_tokens,
+            response_format={"type": "json_object"},
+        )
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return fallback
+
+        if not isinstance(parsed, dict):
+            return fallback
+
+        return parsed
+
+    def rewrite_question(
+        self,
+        interview_type: str,
+        question_text: str,
+        previous_answer: str | None = None,
+        question_metadata: dict | None = None,
+    ) -> str:
+        system_prompt = """
+You are a professional interviewer conducting a real job interview.
+
+Goal:
+- Rewrite the base question so it sounds natural, human, and context-aware.
+
+Rules:
+- Keep the original technical intent unchanged.
+- Ask exactly one question.
+- 1-2 sentences max.
+- If a previous answer exists, optionally add one short neutral bridge sentence.
+- Never praise or judge the candidate.
+- No emojis, no filler, no motivational language.
+- Use metadata only to improve phrasing precision and realism, not to change topic.
+- Return only the interviewer message.
+        """.strip()
+
+        user_prompt = f"""
+Interview type: {interview_type}
+
+Question metadata:
+{json.dumps(question_metadata or {}, ensure_ascii=False)}
+
+Previous candidate answer:
+{previous_answer or "No previous answer provided."}
+
+Original question:
+{question_text}
+        """.strip()
+
+        return self._generate_azure(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.5,
+            max_tokens=140,
+        )
+
+    def evaluate_answer_and_followup(
+        self,
+        interview_type: str,
+        question_text: str,
+        answer_text: str,
+        history: list[dict] | None = None,
+        question_metadata: dict | None = None,
+    ) -> dict:
+        system_prompt = """
+You are a strict but fair technical interviewer.
+
+Evaluate the candidate answer using:
+- the current question
+- interview history
+- structured question metadata (expected concepts, common mistakes, bonus points, type, difficulty)
+
+Return strict JSON only:
+{
+  "score": 1,
+  "feedback": "short feedback",
+  "needs_followup": false,
+  "followup_question": ""
+}
+
+Scoring and follow-up rules:
+- score must be integer 1..10.
+- If score is 8-10, needs_followup must be false.
+- If score is 7, follow-up only if a key point for fair grading is missing.
+- If score <= 6, set follow-up true only when one focused clarification can materially improve confidence.
+- Follow-up must be concise, neutral, and specific.
+- Do not ask broad "tell me more" follow-ups.
+- Prefer checking reasoning, trade-offs, constraints, risks, correctness.
+- Keep feedback concrete and actionable.
+        """.strip()
+
+        user_prompt = f"""
+Interview type: {interview_type}
+
+Question metadata:
+{json.dumps(question_metadata or {}, ensure_ascii=False)}
+
+Conversation history:
+{json.dumps(history or [], ensure_ascii=False)}
+
+Current question:
+{question_text}
+
+Candidate answer:
+{answer_text}
+        """.strip()
+
+        data = self._generate_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_new_tokens=280,
+            fallback={
+                "score": 5,
+                "feedback": "The answer was received, but evaluation formatting failed.",
+                "needs_followup": False,
+                "followup_question": "",
+            },
+        )
+
+        score = data.get("score", 5)
+        try:
+            score = int(score)
+        except (TypeError, ValueError):
+            score = 5
+        score = max(1, min(10, score))
+
+        followup = str(data.get("followup_question", "")).strip()
+        needs_followup = bool(data.get("needs_followup", False))
+        if score >= 8:
+            needs_followup = False
+            followup = ""
+        if not followup:
+            needs_followup = False
+
+        return {
+            "score": score,
+            "feedback": str(data.get("feedback", "")),
+            "needs_followup": needs_followup,
+            "followup_question": followup,
+        }
+
+    def generate_final_session_feedback(
+        self,
+        interview_type: str,
+        qa_pairs: list[dict],
+        session_metadata: dict | None = None,
+    ) -> dict:
+        system_prompt = """
+You are a professional interviewer producing a final interview report.
+
+Use the entire transcript and metadata to provide a concise and fair summary.
+Return strict JSON only:
+{
+  "overall_score": 1,
+  "summary": "short paragraph",
+  "strengths": ["item 1", "item 2"],
+  "improvements": ["item 1", "item 2"]
+}
+
+Rules:
+- overall_score must be integer 1..10.
+- strengths/improvements should be specific and interview-grounded.
+- Keep summary concise and actionable.
+        """.strip()
+
+        user_prompt = f"""
+Interview type: {interview_type}
+Session metadata:
+{json.dumps(session_metadata or {}, ensure_ascii=False)}
+
+Interview transcript:
+{json.dumps(qa_pairs, ensure_ascii=False)}
+        """.strip()
+
+        data = self._generate_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_new_tokens=360,
+            fallback={
+                "overall_score": 5,
+                "summary": "Interview completed, but final evaluation formatting failed.",
+                "strengths": [],
+                "improvements": [],
+            },
+        )
+
+        overall_score = data.get("overall_score", 5)
+        try:
+            overall_score = int(overall_score)
+        except (TypeError, ValueError):
+            overall_score = 5
+        overall_score = max(1, min(10, overall_score))
+
+        strengths = data.get("strengths", [])
+        if not isinstance(strengths, list):
+            strengths = []
+
+        improvements = data.get("improvements", [])
+        if not isinstance(improvements, list):
+            improvements = []
+
+        return {
+            "overall_score": overall_score,
+            "summary": str(data.get("summary", "")),
+            "strengths": [str(item) for item in strengths],
+            "improvements": [str(item) for item in improvements],
+        }
