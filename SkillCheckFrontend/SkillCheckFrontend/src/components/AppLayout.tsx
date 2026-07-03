@@ -58,12 +58,6 @@ export function AppLayout() {
     }
   }, [finalFeedbackQuery.data, pendingFinalFeedbackSessionId]);
 
-  useEffect(() => {
-    if (readyFinalFeedback?.ai_feedback) {
-      setShowFeedbackModal(true);
-    }
-  }, [readyFinalFeedback]);
-
   const closeReadyPopup = () => {
     clearReadyFinalFeedbackData();
     setShowFeedbackModal(false);
@@ -275,17 +269,17 @@ export function AppLayout() {
 
       {pendingFinalFeedbackSessionId && (
         <div
-          className={`fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl border p-5 shadow-2xl backdrop-blur-xl ${
+          className={`fixed bottom-5 right-5 z-50 w-[220px] rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${
             isDark ? "border-white/10 bg-slate-950/90 shadow-black/30" : "border-slate-200 bg-white/95 shadow-slate-900/10"
           }`}
         >
-          <p className="text-sm font-bold">Preparing final feedback</p>
-          <p className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-            Session #{pendingFinalFeedbackSessionId} is being processed. You can keep browsing in the meantime.
-          </p>
-          <p className={`mt-3 text-xs font-semibold ${isDark ? "text-amber-300" : "text-amber-700"}`}>
-            Starting a new interview is temporarily locked.
-          </p>
+          <div className="flex items-center gap-3">
+            <span className={`h-2.5 w-2.5 animate-pulse rounded-full ${isDark ? "bg-amber-300" : "bg-amber-500"}`} />
+            <div>
+              <p className="text-sm font-bold">Summary loading...</p>
+              <p className={`mt-0.5 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Session #{pendingFinalFeedbackSessionId}</p>
+            </div>
+          </div>
           {finalFeedbackQuery.isError && (
             <button
               type="button"
@@ -306,16 +300,19 @@ export function AppLayout() {
         <button
           type="button"
           onClick={() => setShowFeedbackModal(true)}
-          className={`fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl border p-5 text-left shadow-2xl backdrop-blur-xl transition hover:-translate-y-0.5 ${
+          className={`fixed bottom-5 right-5 z-50 w-[220px] rounded-xl border px-4 py-3 text-left shadow-2xl backdrop-blur-xl transition hover:-translate-y-0.5 ${
             isDark
               ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-100 shadow-emerald-950/20"
               : "border-emerald-200 bg-white text-slate-900 shadow-slate-900/10"
           }`}
         >
-          <p className="text-sm font-bold">Final feedback is ready</p>
-          <p className={`mt-1 text-xs ${isDark ? "text-emerald-100/80" : "text-slate-600"}`}>
-            Session #{readyFinalFeedback.session_id}. Open report.
-          </p>
+          <div className="flex items-center gap-3">
+            <span className={`h-2.5 w-2.5 rounded-full ${isDark ? "bg-emerald-300" : "bg-emerald-500"}`} />
+            <div>
+              <p className="text-sm font-bold">Done</p>
+              <p className={`mt-0.5 text-xs ${isDark ? "text-emerald-100/80" : "text-slate-600"}`}>Open final feedback</p>
+            </div>
+          </div>
         </button>
       )}
 

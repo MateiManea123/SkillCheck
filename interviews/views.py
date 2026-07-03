@@ -1,4 +1,3 @@
-import os
 from django.utils import timezone
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -47,15 +46,7 @@ def get_ai_service(interview_type: str) -> AIInterviewService | TechnicalAIInter
     service_key = "HR" if interview_type == "HR" else "TECHNICAL"
     if service_key not in _AI_SERVICES:
         if service_key == "HR":
-            previous_provider = os.environ.get("LLM_PROVIDER")
-            os.environ["LLM_PROVIDER"] = "local"
-            try:
-                _AI_SERVICES[service_key] = AIInterviewService()
-            finally:
-                if previous_provider is None:
-                    os.environ.pop("LLM_PROVIDER", None)
-                else:
-                    os.environ["LLM_PROVIDER"] = previous_provider
+            _AI_SERVICES[service_key] = AIInterviewService()
         else:
             _AI_SERVICES[service_key] = TechnicalAIInterviewService()
     return _AI_SERVICES[service_key]
@@ -335,6 +326,9 @@ def current_question(request,session_id):
     previous_sq = my_session.session_questions.filter(order=my_session.current_index - 1).first()
     if previous_sq and hasattr(previous_sq, "answer"):
         previous_answer = previous_sq.answer.text
+    previous_question_text = None
+    if previous_sq:
+        previous_question_text = previous_sq.display_text or (previous_sq.question.text if previous_sq.question else None)
 
 
     session_questions = my_session.session_questions.order_by("order")
@@ -354,8 +348,9 @@ def current_question(request,session_id):
                 rewritten = ai.rewrite_question(
                     interview_type=my_session.interview_type,
                     question_text=original_text,
-                    previous_answer=previous_answer,
+                    previous_answer=None,
                     question_metadata=_build_question_metadata(my_session, session_question),
+                    previous_question=previous_question_text,
                 )
             else:
                 rewritten = ai.rewrite_question(
@@ -472,11 +467,6 @@ def submit_answer(request,session_id):
 
         my_session.save(update_fields=["current_index", "status", "ended_at"])
 
-    if my_session.status == "FINISHED":
-        _ensure_final_feedback(my_session)
-
-
-    
     return Response({
         "message": "Answer saved",
         "score": ai_result.get("score"),
@@ -508,8 +498,6 @@ def end_session(request, session_id):
     my_session.status = "FINISHED"
     my_session.ended_at = timezone.now()
     my_session.save(update_fields=["status", "ended_at"])
-
-    _ensure_final_feedback(my_session)
 
     return Response(
         {
